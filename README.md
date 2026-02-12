@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Luda Album
 
-## Getting Started
+루다의 첫 설날을 기념하는 모바일 우선 가족 앨범입니다.
 
-First, run the development server:
+## 기능
+
+- 홈: 대표 이미지와 인사 문구
+- 갤러리: 10장 구성, 모바일 그리드 + 탭 확대 보기
+- 덕담: 닉네임/내용 입력, 최신순 목록, 실패 메시지 표시
+
+## 로컬 실행
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 `http://localhost:3000` 접속
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 테스트/검증
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run test
+npm run lint
+npm run build
+```
 
-## Learn More
+## Supabase 연결 (선택)
 
-To learn more about Next.js, take a look at the following resources:
+환경 변수가 없으면 덕담 기능은 인메모리 fallback으로 동작합니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`.env.local`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+# 선택: 서버 전용 권한 키
+SUPABASE_SERVICE_ROLE_KEY=...
+```
 
-## Deploy on Vercel
+DB 스키마는 `docs/db/guestbook.sql`을 사용하세요.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 배포
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Vercel에 프로젝트 연결
+2. 환경 변수 설정 (Supabase 사용 시)
+3. 프로덕션 URL 공유
