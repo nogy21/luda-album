@@ -1,18 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg: #f5efe8;
-  --color-surface: #fffaf3;
-  --color-surface-strong: #fffdf9;
-  --color-ink: #221710;
-  --color-muted: #7f6658;
-  --color-line: rgb(50 28 19 / 16%);
-  --color-brand: #b24c32;
-  --color-brand-soft: #f0d7c6;
-  --color-accent: #b58a49;
-  --shadow-card: 0 16px 36px rgb(45 27 19 / 9%);
-  --shadow-soft: 0 9px 22px rgb(45 27 19 / 7%);
-  --radius-lg: 1.4rem;
+  --color-bg: #f1f2f4;
+  --color-surface: #f8f8fa;
+  --color-surface-strong: #ffffff;
+  --color-ink: #11151b;
+  --color-muted: #56606b;
+  --color-line: rgb(17 21 27 / 12%);
+  --color-brand: #cb5333;
+  --color-brand-soft: #fee9e1;
+  --color-accent: #be9150;
+  --shadow-card: 0 18px 38px rgb(17 21 27 / 12%);
+  --shadow-soft: 0 10px 24px rgb(17 21 27 / 8%);
+  --shadow-float: 0 22px 48px rgb(17 21 27 / 14%);
+  --radius-lg: 1.3rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --text-title: 1.3rem;
+  --text-body: 0.98rem;
+}
+
+.motion-safe-scale {
+  transition: transform 280ms ease;
+}
+
+.motion-safe-scale:hover {
+  transform: scale(1.03);
 }
 
 *,
@@ -31,9 +48,9 @@ body {
   min-height: 100dvh;
   color: var(--color-ink);
   background:
-    radial-gradient(circle at 0% 0%, #f7e7d8 0%, transparent 42%),
-    radial-gradient(circle at 100% 8%, #f3e0cb 0%, transparent 40%),
-    linear-gradient(160deg, #f9f3eb 0%, #f5efe8 36%, #f2eadf 100%);
+    radial-gradient(circle at 100% 0%, rgb(203 83 51 / 13%) 0%, transparent 38%),
+    radial-gradient(circle at 0% 25%, rgb(190 145 80 / 10%) 0%, transparent 32%),
+    linear-gradient(165deg, #f8f8fb 0%, #f1f2f4 52%, #eceef1 100%);
   font-family:
     var(--font-paperlogy),
     "Apple SD Gothic Neo",
@@ -50,9 +67,15 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgb(160 128 105 / 5%) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(160 128 105 / 4%) 1px, transparent 1px);
-  background-size: 26px 26px;
+    radial-gradient(circle at 15% 15%, rgb(203 83 51 / 8%) 0%, transparent 34%),
+    repeating-linear-gradient(
+      125deg,
+      rgb(17 21 27 / 1.8%) 0,
+      rgb(17 21 27 / 1.8%) 1px,
+      transparent 1px,
+      transparent 12px
+    );
+  background-size: auto;
 }
 
 ::selection {
@@ -101,7 +124,7 @@ body::before {
 }
 
 .enter-fade-up {
-  animation: fade-up 0.5s ease-out both;
+  animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .enter-delay-1 {
@@ -117,5 +140,11 @@ body::before {
   .enter-delay-1,
   .enter-delay-2 {
     animation: none;
+  }
+
+  .motion-safe-scale,
+  .motion-safe-scale:hover {
+    transform: none;
+    transition: none;
   }
 }

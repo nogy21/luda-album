@@ -162,38 +162,38 @@ export function GallerySection() {
   return (
     <section
       id="gallery"
-      className="enter-fade-up enter-delay-1 scroll-mt-24 w-full rounded-[1.5rem] border border-[color:var(--color-line)]/45 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-5"
+      className="enter-fade-up enter-delay-1 scroll-mt-24 w-full rounded-[1.45rem] border border-[color:var(--color-line)]/40 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
     >
-      <div className="mb-5 flex items-end justify-between gap-2 px-1">
+      <div className="mb-4 flex items-end justify-between gap-2.5">
         <div>
-          <h2 className="text-[1.35rem] font-bold leading-tight text-[color:var(--color-ink)]">
+          <h2 className="text-[length:var(--text-title)] font-bold leading-tight text-[color:var(--color-ink)]">
             사진 모아보기
           </h2>
-          <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+          <p className="mt-1 text-[0.92rem] text-[color:var(--color-muted)]">
             주요 사진부터 월별 아카이브까지 빠르게 탐색
           </p>
         </div>
-        <p className="rounded-full bg-[color:var(--color-brand-soft)]/70 px-3 py-1 text-xs font-semibold text-[color:var(--color-brand)]">
+        <p className="rounded-full border border-[color:var(--color-line)]/35 bg-[color:var(--color-brand-soft)]/55 px-2.5 py-1 text-[0.76rem] font-semibold text-[color:var(--color-brand)]">
           총 {galleryImages.length}장
         </p>
       </div>
 
-      <section className="mb-5 rounded-2xl border border-[color:var(--color-line)]/35 bg-[color:var(--color-surface)] p-3.5">
+      <section className="mb-4 rounded-[1.15rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(17,21,27,0.04)]">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-[color:var(--color-ink)]">하이라이트</h3>
-          <span className="text-xs font-semibold text-[color:var(--color-muted)]">
+          <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">하이라이트</h3>
+          <span className="text-[0.76rem] font-semibold text-[color:var(--color-muted)]">
             최근 {highlights.length}장
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-2">
           {highlights.map((image, index) => (
             <button
               key={image.id}
               type="button"
               onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
-                className={`group relative overflow-hidden rounded-xl bg-[#eadcca] text-left shadow-[0_6px_14px_rgba(45,27,19,0.06)] ${
-                  index === 0 ? "col-span-2" : ""
-                }`}
+              className={`group relative overflow-hidden rounded-[0.9rem] bg-[#eadcca] text-left shadow-[0_7px_16px_rgba(45,27,19,0.08)] ${
+                index === 0 ? "col-span-2" : ""
+              }`}
               aria-label={`${image.caption} 확대 보기`}
             >
               <Image
@@ -206,21 +206,23 @@ export function GallerySection() {
                     ? "(max-width: 767px) 100vw, 760px"
                     : "(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
                 }
-                className={`w-full object-cover transition duration-300 group-hover:scale-[1.03] ${
-                  index === 0 ? "aspect-[16/10]" : "aspect-[3/4]"
+                className={`motion-safe-scale w-full object-cover ${
+                  index === 0 ? "aspect-[16/11]" : "aspect-square"
                 }`}
                 priority={index < 2}
               />
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2.5 pt-8 text-xs font-semibold text-white/95">
-                {image.caption}
-              </span>
+              {index === 0 ? (
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2.5 pt-8 text-[0.72rem] font-semibold text-white/95">
+                  {image.caption}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h3 className="px-1 text-lg font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
+      <section className="space-y-2.5">
+        <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
 
         {monthGroups.map((group) => {
           const open = isMonthOpen(group.key);
@@ -229,35 +231,34 @@ export function GallerySection() {
           return (
             <article
               key={group.key}
-              className="overflow-hidden rounded-2xl border border-[color:var(--color-line)]/35 bg-[color:var(--color-surface)]"
+              className="overflow-hidden rounded-[1.12rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(17,21,27,0.035)]"
             >
               <button
                 type="button"
                 onClick={() => toggleMonth(group.key)}
                 aria-expanded={open}
-                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
               >
                 <div>
-                  <p className="text-base font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                  <p className="text-xs text-[color:var(--color-muted)]">{group.items.length}장의 기록</p>
+                  <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
+                  <p className="text-[0.75rem] text-[color:var(--color-muted)]">{group.items.length}장의 기록</p>
                 </div>
-                <span className="text-lg font-semibold text-[color:var(--color-muted)]">
+                <span className="text-base font-semibold text-[color:var(--color-muted)]">
                   {open ? "−" : "+"}
                 </span>
               </button>
 
               {open ? (
                 <div
-                  className="space-y-3 border-t border-[color:var(--color-line)]/25 p-3.5"
-                  style={{ contentVisibility: "auto", containIntrinsicSize: "680px" }}
+                  className="space-y-2.5 border-t border-[color:var(--color-line)]/22 p-3"
                 >
-                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                     {visibleItems.map((image, index) => (
                       <button
                         key={image.id}
                         type="button"
                         onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-xl bg-[#eadcca] text-left shadow-[0_6px_14px_rgba(45,27,19,0.06)]"
+                        className="group relative overflow-hidden rounded-[0.86rem] bg-[#eadcca] text-left shadow-[0_7px_15px_rgba(45,27,19,0.08)]"
                         aria-label={`${image.caption} 확대 보기`}
                       >
                         <Image
@@ -266,7 +267,7 @@ export function GallerySection() {
                           width={420}
                           height={560}
                           sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                          className="aspect-[3/4] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                          className="motion-safe-scale aspect-square w-full object-cover"
                         />
                       </button>
                     ))}
@@ -276,7 +277,7 @@ export function GallerySection() {
                     <button
                       type="button"
                       onClick={() => loadMore(group.key)}
-                       className="min-h-11 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]/35"
+                       className="min-h-11 rounded-full border border-[color:var(--color-line)]/65 bg-[color:var(--color-surface)] px-3.5 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]/45"
                      >
                        더 불러오기
                      </button>
@@ -289,7 +290,7 @@ export function GallerySection() {
       </section>
       {selectedImage ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/85 p-3 backdrop-blur-[2px]"
+          className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/88 p-3 backdrop-blur-[2px]"
           role="dialog"
           aria-modal="true"
           aria-label="갤러리 이미지 크게 보기"
@@ -299,7 +300,7 @@ export function GallerySection() {
             }
           }}
         >
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/15 bg-black">
+           <div className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
             <Image
               src={selectedImage.src}
               alt={selectedImage.alt}
