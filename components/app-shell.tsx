@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
@@ -10,6 +11,7 @@ import {
   getShuffledFeaturedImages,
 } from "@/lib/gallery/featured";
 import { galleryImages } from "@/lib/gallery/images";
+import { buildSoftRevealTransition } from "@/lib/ui/motion-config";
 
 type AppShellProps = {
   children: ReactNode;
@@ -84,6 +86,8 @@ export function CoverCard() {
   const [featuredImages, setFeaturedImages] = useState(() =>
     getInitialFeaturedImages(galleryImages),
   );
+  const shouldReduceMotion = useReducedMotion();
+  const reduceMotion = !!shouldReduceMotion;
   const tileClasses = useMemo(
     () => [
       "col-span-4 row-span-3",
@@ -96,7 +100,12 @@ export function CoverCard() {
   );
 
   return (
-    <section className="enter-fade-up mb-4 overflow-hidden rounded-[1.5rem] border border-[color:var(--color-line)]/42 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-float)] sm:p-4.5">
+    <motion.section
+      className="mb-4 overflow-hidden rounded-[1.5rem] border border-[color:var(--color-line)]/42 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-float)] sm:p-4.5"
+      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={buildSoftRevealTransition(reduceMotion, 0.04)}
+    >
       <div className="mb-3 flex items-center justify-between gap-2">
         <header>
           <p className="text-[0.69rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-brand)]">
@@ -117,11 +126,14 @@ export function CoverCard() {
 
       <div className="grid grid-cols-6 auto-rows-[74px] gap-2 sm:auto-rows-[88px]">
         {featuredImages.map((image, index) => (
-          <article
+          <motion.article
             key={image.id}
             className={`group relative overflow-hidden rounded-[0.95rem] bg-[#eadcca] text-left shadow-[0_8px_18px_rgba(45,27,19,0.08)] ${
               tileClasses[index] ?? "col-span-2 row-span-1"
             }`}
+            initial={reduceMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 14, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={buildSoftRevealTransition(reduceMotion, 0.1 + index * 0.05)}
           >
             <Image
               src={image.src}
@@ -136,9 +148,9 @@ export function CoverCard() {
                 {image.caption}
               </span>
             ) : null}
-          </article>
+          </motion.article>
         ))}
       </div>
-    </section>
+    </motion.section>
   );
 }

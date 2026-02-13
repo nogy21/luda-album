@@ -1,10 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
 import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
+import { buildSoftRevealTransition } from "@/lib/ui/motion-config";
+import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 const HIGHLIGHT_COUNT = 6;
 const ARCHIVE_BATCH_SIZE = 12;
@@ -25,18 +29,20 @@ export function GallerySection() {
     Object.fromEntries(monthGroups.map((group) => [group.key, ARCHIVE_BATCH_SIZE])),
   );
   const [lightbox, setLightbox] = useState<{ items: GalleryImage[]; index: number } | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const reduceMotion = !!shouldReduceMotion;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const portalRoot = typeof document === "undefined" ? null : document.body;
 
   useEffect(() => {
     if (!lightbox) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const snapshot = lockPageScroll();
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockPageScroll(snapshot);
     };
   }, [lightbox]);
 
@@ -159,192 +165,206 @@ export function GallerySection() {
     return totalCount > visible;
   };
 
-  return (
-    <section
-      id="gallery"
-      className="enter-fade-up enter-delay-1 scroll-mt-24 w-full rounded-[1.45rem] border border-[color:var(--color-line)]/40 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+  const lightboxOverlay = selectedImage ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/88 p-3 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="갤러리 이미지 크게 보기"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          closeLightbox();
+        }
+      }}
     >
-      <div className="mb-4 flex items-end justify-between gap-2.5">
-        <div>
-          <h2 className="text-[length:var(--text-title)] font-bold leading-tight text-[color:var(--color-ink)]">
-            사진 모아보기
-          </h2>
-          <p className="mt-1 text-[0.92rem] text-[color:var(--color-muted)]">
-            주요 사진부터 월별 아카이브까지 빠르게 탐색
-          </p>
-        </div>
-        <p className="rounded-full border border-[color:var(--color-line)]/35 bg-[color:var(--color-brand-soft)]/55 px-2.5 py-1 text-[0.76rem] font-semibold text-[color:var(--color-brand)]">
-          총 {galleryImages.length}장
-        </p>
-      </div>
-
-      <section className="mb-4 rounded-[1.15rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(17,21,27,0.04)]">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">하이라이트</h3>
-          <span className="text-[0.76rem] font-semibold text-[color:var(--color-muted)]">
-            최근 {highlights.length}장
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {highlights.map((image, index) => (
-            <button
-              key={image.id}
-              type="button"
-              onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
-              className={`group relative overflow-hidden rounded-[0.9rem] bg-[#eadcca] text-left shadow-[0_7px_16px_rgba(45,27,19,0.08)] ${
-                index === 0 ? "col-span-2" : ""
-              }`}
-              aria-label={`${image.caption} 확대 보기`}
-            >
-              <Image
-                src={image.src}
-                alt={image.alt}
-                width={index === 0 ? 1024 : 420}
-                height={index === 0 ? 640 : 560}
-                sizes={
-                  index === 0
-                    ? "(max-width: 767px) 100vw, 760px"
-                    : "(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                }
-                className={`motion-safe-scale w-full object-cover ${
-                  index === 0 ? "aspect-[16/11]" : "aspect-square"
-                }`}
-                priority={index < 2}
-              />
-              {index === 0 ? (
-                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2.5 pt-8 text-[0.72rem] font-semibold text-white/95">
-                  {image.caption}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-2.5">
-        <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
-
-        {monthGroups.map((group) => {
-          const open = isMonthOpen(group.key);
-          const visibleItems = getVisibleItems(group.key, group.items);
-
-          return (
-            <article
-              key={group.key}
-              className="overflow-hidden rounded-[1.12rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(17,21,27,0.035)]"
-            >
-              <button
-                type="button"
-                onClick={() => toggleMonth(group.key)}
-                aria-expanded={open}
-                className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
-              >
-                <div>
-                  <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                  <p className="text-[0.75rem] text-[color:var(--color-muted)]">{group.items.length}장의 기록</p>
-                </div>
-                <span className="text-base font-semibold text-[color:var(--color-muted)]">
-                  {open ? "−" : "+"}
-                </span>
-              </button>
-
-              {open ? (
-                <div
-                  className="space-y-2.5 border-t border-[color:var(--color-line)]/22 p-3"
-                >
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                    {visibleItems.map((image, index) => (
-                      <button
-                        key={image.id}
-                        type="button"
-                        onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.86rem] bg-[#eadcca] text-left shadow-[0_7px_15px_rgba(45,27,19,0.08)]"
-                        aria-label={`${image.caption} 확대 보기`}
-                      >
-                        <Image
-                          src={image.src}
-                          alt={image.alt}
-                          width={420}
-                          height={560}
-                          sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                          className="motion-safe-scale aspect-square w-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-
-                  {hasMoreItems(group.key, group.items.length) ? (
-                    <button
-                      type="button"
-                      onClick={() => loadMore(group.key)}
-                       className="min-h-11 rounded-full border border-[color:var(--color-line)]/65 bg-[color:var(--color-surface)] px-3.5 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]/45"
-                     >
-                       더 불러오기
-                     </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </article>
-          );
-        })}
-      </section>
-      {selectedImage ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/88 p-3 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal="true"
-          aria-label="갤러리 이미지 크게 보기"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeLightbox();
-            }
-          }}
-        >
-           <div className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
-            <Image
-              src={selectedImage.src}
-              alt={selectedImage.alt}
-              width={1000}
-              height={1200}
-              sizes="(max-width: 768px) 92vw, 760px"
-              className="max-h-[78vh] w-full object-contain"
-              priority
-            />
-            <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5 text-white">
-              <p className="line-clamp-1 text-sm font-medium text-white/90">{selectedImage.caption}</p>
-              <div className="flex items-center gap-1.5">
-                {lightbox && lightbox.items.length > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={showPrevious}
-                      className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                      aria-label="이전 사진"
-                    >
-                      ‹
-                    </button>
-                    <button
-                      type="button"
-                      onClick={showNext}
-                      className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                      aria-label="다음 사진"
-                    >
-                      ›
-                    </button>
-                  </>
-                ) : null}
+      <div className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
+        <Image
+          src={selectedImage.src}
+          alt={selectedImage.alt}
+          width={1000}
+          height={1200}
+          sizes="(max-width: 768px) 92vw, 760px"
+          className="max-h-[78vh] w-full object-contain"
+          priority
+        />
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5 text-white">
+          <p className="line-clamp-1 text-sm font-medium text-white/90">{selectedImage.caption}</p>
+          <div className="flex items-center gap-1.5">
+            {lightbox && lightbox.items.length > 1 ? (
+              <>
                 <button
                   type="button"
-                  onClick={closeLightbox}
-                  className="min-h-11 rounded-full bg-white/20 px-4 text-sm font-semibold text-white"
+                  onClick={showPrevious}
+                  className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                  aria-label="이전 사진"
                 >
-                  닫기
+                  ‹
                 </button>
-              </div>
-            </div>
+                <button
+                  type="button"
+                  onClick={showNext}
+                  className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                  aria-label="다음 사진"
+                >
+                  ›
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="min-h-11 rounded-full bg-white/20 px-4 text-sm font-semibold text-white"
+            >
+              닫기
+            </button>
           </div>
         </div>
-      ) : null}
-    </section>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <motion.section
+        id="gallery"
+        className="scroll-mt-24 w-full rounded-[1.45rem] border border-[color:var(--color-line)]/40 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+        initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.2 }}
+        transition={buildSoftRevealTransition(reduceMotion, 0.08)}
+      >
+        <div className="mb-4 flex items-end justify-between gap-2.5">
+          <div>
+            <h2 className="text-[length:var(--text-title)] font-bold leading-tight text-[color:var(--color-ink)]">
+              사진 모아보기
+            </h2>
+            <p className="mt-1 text-[0.92rem] text-[color:var(--color-muted)]">
+              주요 사진부터 월별 아카이브까지 빠르게 탐색
+            </p>
+          </div>
+          <p className="rounded-full border border-[color:var(--color-line)]/35 bg-[color:var(--color-brand-soft)]/55 px-2.5 py-1 text-[0.76rem] font-semibold text-[color:var(--color-brand)]">
+            총 {galleryImages.length}장
+          </p>
+        </div>
+
+        <section className="mb-4 rounded-[1.15rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(17,21,27,0.04)]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">하이라이트</h3>
+            <span className="text-[0.76rem] font-semibold text-[color:var(--color-muted)]">
+              최근 {highlights.length}장
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {highlights.map((image, index) => (
+              <motion.button
+                key={image.id}
+                type="button"
+                onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
+                className={`group relative overflow-hidden rounded-[0.9rem] bg-[#eadcca] text-left shadow-[0_7px_16px_rgba(45,27,19,0.08)] ${
+                  index === 0 ? "col-span-2" : ""
+                }`}
+                aria-label={`${image.caption} 확대 보기`}
+                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={buildSoftRevealTransition(reduceMotion, 0.14 + index * 0.04)}
+              >
+                <Image
+                  src={image.src}
+                  alt={image.alt}
+                  width={index === 0 ? 1024 : 420}
+                  height={index === 0 ? 640 : 560}
+                  sizes={
+                    index === 0
+                      ? "(max-width: 767px) 100vw, 760px"
+                      : "(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
+                  }
+                  className={`motion-safe-scale w-full object-cover ${
+                    index === 0 ? "aspect-[16/11]" : "aspect-square"
+                  }`}
+                  priority={index < 2}
+                />
+                {index === 0 ? (
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2.5 pt-8 text-[0.72rem] font-semibold text-white/95">
+                    {image.caption}
+                  </span>
+                ) : null}
+              </motion.button>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-2.5">
+          <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
+
+          {monthGroups.map((group) => {
+            const open = isMonthOpen(group.key);
+            const visibleItems = getVisibleItems(group.key, group.items);
+
+            return (
+              <motion.article
+                key={group.key}
+                className="overflow-hidden rounded-[1.12rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(17,21,27,0.035)]"
+                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.12 }}
+                transition={buildSoftRevealTransition(reduceMotion, 0.1)}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleMonth(group.key)}
+                  aria-expanded={open}
+                  className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+                >
+                  <div>
+                    <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
+                    <p className="text-[0.75rem] text-[color:var(--color-muted)]">{group.items.length}장의 기록</p>
+                  </div>
+                  <span className="text-base font-semibold text-[color:var(--color-muted)]">
+                    {open ? "−" : "+"}
+                  </span>
+                </button>
+
+                {open ? (
+                  <div className="space-y-2.5 border-t border-[color:var(--color-line)]/22 p-3">
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                      {visibleItems.map((image, index) => (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
+                          className="group relative overflow-hidden rounded-[0.86rem] bg-[#eadcca] text-left shadow-[0_7px_15px_rgba(45,27,19,0.08)]"
+                          aria-label={`${image.caption} 확대 보기`}
+                        >
+                          <Image
+                            src={image.src}
+                            alt={image.alt}
+                            width={420}
+                            height={560}
+                            sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
+                            className="motion-safe-scale aspect-square w-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+
+                    {hasMoreItems(group.key, group.items.length) ? (
+                      <button
+                        type="button"
+                        onClick={() => loadMore(group.key)}
+                        className="min-h-11 rounded-full border border-[color:var(--color-line)]/65 bg-[color:var(--color-surface)] px-3.5 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]/45"
+                      >
+                        더 불러오기
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </motion.article>
+            );
+          })}
+        </section>
+      </motion.section>
+      {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}
+    </>
   );
 }
