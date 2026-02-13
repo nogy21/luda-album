@@ -1,28 +1,12 @@
 import type { Metadata } from "next";
-import { Gowun_Batang } from "next/font/google";
-import localFont from "next/font/local";
+import { Gowun_Batang, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
-const paperlogy = localFont({
+const paperlogy = Noto_Sans_KR({
   variable: "--font-paperlogy",
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
   display: "swap",
-  src: [
-    {
-      path: "../public/Paperlogy/Paperlogy-4Regular.ttf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "../public/Paperlogy/Paperlogy-5Medium.ttf",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "../public/Paperlogy/Paperlogy-7Bold.ttf",
-      weight: "700",
-      style: "normal",
-    },
-  ],
 });
 
 const gowunBatang = Gowun_Batang({
