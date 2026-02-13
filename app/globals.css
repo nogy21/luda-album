@@ -1,12 +1,121 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #f5efe8;
+  --color-surface: #fffaf3;
+  --color-surface-strong: #fffdf9;
+  --color-ink: #221710;
+  --color-muted: #7f6658;
+  --color-line: rgb(50 28 19 / 16%);
+  --color-brand: #b24c32;
+  --color-brand-soft: #f0d7c6;
+  --color-accent: #b58a49;
+  --shadow-card: 0 16px 36px rgb(45 27 19 / 9%);
+  --shadow-soft: 0 9px 22px rgb(45 27 19 / 7%);
+  --radius-lg: 1.4rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), sans-serif;
+  min-height: 100dvh;
+  color: var(--color-ink);
+  background:
+    radial-gradient(circle at 0% 0%, #f7e7d8 0%, transparent 42%),
+    radial-gradient(circle at 100% 8%, #f3e0cb 0%, transparent 40%),
+    linear-gradient(160deg, #f9f3eb 0%, #f5efe8 36%, #f2eadf 100%);
+  font-family:
+    var(--font-paperlogy),
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    sans-serif;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgb(160 128 105 / 5%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(160 128 105 / 4%) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+::selection {
+  background: rgb(178 76 50 / 22%);
+  color: var(--color-ink);
+}
+
+.page-base h1,
+.page-base h2,
+.page-base h3 {
+  font-family:
+    var(--font-gowun-batang),
+    var(--font-paperlogy),
+    "Noto Serif KR",
+    serif;
+  text-wrap: balance;
+}
+
+.page-base a,
+.page-base button,
+.page-base input,
+.page-base textarea {
+  font: inherit;
+}
+
+.page-base a,
+.page-base button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgb(178 76 50 / 20%);
+}
+
+.page-base :focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.enter-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+.enter-delay-1 {
+  animation-delay: 80ms;
+}
+
+.enter-delay-2 {
+  animation-delay: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-fade-up,
+  .enter-delay-1,
+  .enter-delay-2 {
+    animation: none;
+  }
 }
