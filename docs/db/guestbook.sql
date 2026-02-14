@@ -25,3 +25,14 @@ create table if not exists public.gallery_photos (
 
 create index if not exists gallery_photos_taken_at_desc_idx
   on public.gallery_photos (taken_at desc);
+
+create table if not exists public.photo_comments (
+  id uuid primary key default gen_random_uuid(),
+  photo_id uuid not null references public.gallery_photos(id) on delete cascade,
+  nickname text not null default '익명의 팬',
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists photo_comments_photo_id_created_at_desc_idx
+  on public.photo_comments (photo_id, created_at desc);
