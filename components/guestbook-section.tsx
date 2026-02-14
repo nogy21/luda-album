@@ -14,9 +14,15 @@ type GuestbookApiError = {
 
 type SubmitStatus = "idle" | "posting" | "success" | "error";
 
-export function GuestbookSection() {
+type GuestbookSectionProps = {
+  prefillMessage?: string;
+};
+
+export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
   const [nickname, setNickname] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() =>
+    prefillMessage ? prefillMessage.slice(0, MAX_GUESTBOOK_MESSAGE_LENGTH) : "",
+  );
   const [messages, setMessages] = useState<GuestbookRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
@@ -130,9 +136,9 @@ export function GuestbookSection() {
       id="guestbook"
       className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
     >
-      <p className="sr-only" role="status" aria-live="polite">
+      <output className="sr-only" aria-live="polite">
         {asyncAnnounceMessage}
-      </p>
+      </output>
 
       <header className="mb-4 space-y-1">
         <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">

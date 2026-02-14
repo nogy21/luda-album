@@ -1,11 +1,17 @@
 import { AppShell, CoverCard } from "@/components/app-shell";
 import { GuestbookSection } from "@/components/guestbook-section";
 
-export default function GuestbookPage() {
+type GuestbookPageSearchParams = {
+  prefill?: string;
+};
+
+export default async function GuestbookPage({ searchParams }: { searchParams?: Promise<GuestbookPageSearchParams> }) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+
   return (
     <AppShell>
       <CoverCard />
-      <GuestbookSection />
+      <GuestbookSection prefillMessage={resolvedSearchParams.prefill} />
     </AppShell>
   );
 }
