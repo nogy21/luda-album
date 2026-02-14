@@ -21,7 +21,7 @@ export function LandingMemorySection({ items }: LandingMemorySectionProps) {
   }
 
   return (
-    <section className="mx-auto mt-4 w-full max-w-[860px] px-4 sm:px-6">
+    <section className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
       <div className="rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)]">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-[1.05rem] font-semibold text-[color:var(--color-ink)]">추억 회상</h2>

@@ -13,7 +13,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
   }
 
   return (
-    <section className="mx-auto mt-4 w-full max-w-[860px] px-4 sm:px-6">
+    <section className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
       <div className="rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)]">
         <div className="mb-2.5 flex items-center justify-between gap-2">
           <h2 className="text-[1.05rem] font-semibold text-[color:var(--color-ink)]">요즘 루다는...</h2>
@@ -25,8 +25,8 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-4 gap-1.5">
-          {items.slice(0, 8).map((item) => (
+        <div className="grid grid-cols-3 gap-1.5">
+          {items.slice(0, 6).map((item) => (
             <Link
               key={item.id}
               href="/photos"

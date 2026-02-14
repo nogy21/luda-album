@@ -1,3 +1,4 @@
+import { FixedBottomNav } from "@/components/fixed-bottom-nav";
 import { LandingGuestbookCta } from "@/components/landing-guestbook-cta";
 import { LandingHero } from "@/components/landing-hero";
 import { LandingMemorySection } from "@/components/landing-memory-section";
@@ -32,11 +33,12 @@ export default async function Home() {
   }
 
   return (
-    <>
-      <LandingHero />
-      <LandingMemorySection items={items} />
+    <div className="min-h-screen pb-[7.25rem]">
+      <LandingHero items={items} />
       <LandingRecentSection items={items} />
+      <LandingMemorySection items={items} />
       <LandingGuestbookCta />
-    </>
+      <FixedBottomNav maxWidth={860} />
+    </div>
   );
 }
