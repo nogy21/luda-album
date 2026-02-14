@@ -60,6 +60,7 @@ export type ListPhotosPageOptions = {
   limit?: number;
   year?: number;
   month?: number;
+  day?: number;
   visibility?: PhotoVisibility;
 };
 
@@ -175,6 +176,7 @@ export const mapPhotoItemToGalleryImage = (item: PhotoItem): GalleryImage => {
     thumbSrc: item.thumbSrc,
     alt: item.alt,
     caption: item.caption,
+    tags: item.tags,
     takenAt: item.takenAt,
     updatedAt: item.updatedAt,
     visibility: item.visibility,
@@ -190,6 +192,7 @@ export const mapGalleryImageToPhotoItem = (item: GalleryImage): PhotoItem => {
     thumbSrc: item.thumbSrc ?? null,
     alt: item.alt,
     caption: item.caption,
+    tags: item.tags,
     takenAt: item.takenAt,
     updatedAt: item.updatedAt ?? item.takenAt,
     visibility: item.visibility ?? DEFAULT_VISIBILITY,
@@ -202,9 +205,19 @@ const applyDateRangeFilter = (
   query: QueryChain,
   year?: number,
   month?: number,
+  day?: number,
 ) => {
   if (!year) {
     return query;
+  }
+
+  if (month && day && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+    const fromDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const toDate = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+
+    return query
+      .gte("taken_at", fromDate.toISOString())
+      .lt("taken_at", toDate.toISOString());
   }
 
   if (month && month >= 1 && month <= 12) {
@@ -308,12 +321,14 @@ const listPhotoSummaryFromDatabase = async (
     tableName,
     year,
     month,
+    day,
     visibility,
   }: {
     tableName: string;
     year?: number;
     month?: number;
     visibility?: PhotoVisibility;
+    day?: number;
   },
 ): Promise<{ totalCount: number; yearMonthStats: YearMonthStat[] }> => {
   let query = supabase
@@ -324,7 +339,7 @@ const listPhotoSummaryFromDatabase = async (
     .order("taken_at", { ascending: false });
 
   query = query.eq("visibility", getQueryVisibility(visibility));
-  query = applyDateRangeFilter(query, year, month);
+  query = applyDateRangeFilter(query, year, month, day);
 
   const { data, error } = (await (query as unknown as QueryPromise<GalleryPhotoSummaryRow[]>)) as {
     data: GalleryPhotoSummaryRow[] | null;
@@ -396,7 +411,7 @@ export const listPhotosPageFromDatabase = async (
     query = query.lt("taken_at", cursorTakenAt);
   }
 
-  query = applyDateRangeFilter(query, options.year, options.month);
+  query = applyDateRangeFilter(query, options.year, options.month, options.day);
 
   const { data, error } = (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
     data: GalleryPhotoRow[] | null;
@@ -416,6 +431,7 @@ export const listPhotosPageFromDatabase = async (
     tableName,
     year: options.year,
     month: options.month,
+    day: options.day,
     visibility: options.visibility,
   });
 
