@@ -23,6 +23,10 @@ export const buildPhotoDayDeepLink = (takenAtIso: string) => {
   return `/photos?year=${date.getUTCFullYear()}&month=${date.getUTCMonth() + 1}&day=${date.getUTCDate()}`;
 };
 
+export const buildDismissSnoozeUntil = (now: Date) => {
+  return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+};
+
 export const isNewPhotoNoticeEligible = ({
   now = new Date(),
   latestPhotoTakenAt,

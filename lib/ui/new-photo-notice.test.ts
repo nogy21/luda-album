@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  buildDismissSnoozeUntil,
   buildPhotoDayDeepLink,
   isNewPhotoNoticeEligible,
   toLocalDateKey,
@@ -45,5 +46,11 @@ describe("new photo notice", () => {
 
   test("builds deep link to day album", () => {
     expect(buildPhotoDayDeepLink("2026-02-15T08:00:00.000Z")).toBe("/photos?year=2026&month=2&day=15");
+  });
+
+  test("sets dismiss snooze to 24 hours", () => {
+    const now = new Date("2026-02-15T09:00:00.000Z");
+
+    expect(buildDismissSnoozeUntil(now)).toBe("2026-02-16T09:00:00.000Z");
   });
 });
