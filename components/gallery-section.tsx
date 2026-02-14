@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { formatMonthMetaLabel } from "@/lib/gallery/time";
+import { getPhotoTags, groupPhotosByTag } from "@/lib/gallery/tags";
 import type {
   HighlightResponse,
   PhotoItem,
@@ -20,6 +21,11 @@ const PAGE_LIMIT = 36;
 type GallerySectionProps = {
   initialData: PhotoListResponse;
   initialHighlights: HighlightResponse;
+  initialFilter?: {
+    year?: number;
+    month?: number;
+    day?: number;
+  };
 };
 
 type LightboxState = {
@@ -89,7 +95,7 @@ const formatDateLabel = (takenAt: string) => {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
-export function GallerySection({ initialData, initialHighlights }: GallerySectionProps) {
+export function GallerySection({ initialData, initialHighlights, initialFilter }: GallerySectionProps) {
   const [items, setItems] = useState<PhotoItem[]>(() => initialData.items);
   const [summary, setSummary] = useState<PhotoListResponse["summary"]>(
     initialData.summary,
@@ -106,6 +112,8 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [pendingJumpKey, setPendingJumpKey] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [viewMode, setViewMode] = useState<"timeline" | "tags">("timeline");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -185,9 +193,24 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
       highlights: highlightItems,
     };
   }, [highlights, items]);
+  const tagAlbums = useMemo(() => groupPhotosByTag(items), [items]);
+  const activeTagItems = useMemo(() => {
+    if (!activeTag) {
+      return [];
+    }
+
+    return items.filter((item) => getPhotoTags(item).includes(activeTag));
+  }, [activeTag, items]);
 
   useEffect(() => {
     if (reduceMotion) {
+      return;
+    }
+
+    const highlightCount =
+      effectiveHighlights.featured.length + effectiveHighlights.highlights.length;
+
+    if (highlightCount === 0) {
       return;
     }
 
@@ -219,7 +242,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
     return () => {
       tween.kill();
     };
-  }, [reduceMotion, effectiveHighlights.featured.length, effectiveHighlights.highlights.length]);
+  }, [reduceMotion, effectiveHighlights]);
 
   useEffect(() => {
     if (!lightbox) {
@@ -317,6 +340,19 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
         cursor: nextCursor,
         limit: `${PAGE_LIMIT}`,
       });
+
+      if (initialFilter?.year) {
+        params.set("year", `${initialFilter.year}`);
+      }
+
+      if (initialFilter?.month) {
+        params.set("month", `${initialFilter.month}`);
+      }
+
+      if (initialFilter?.day) {
+        params.set("day", `${initialFilter.day}`);
+      }
+
       const response = await fetch(`/api/photos?${params.toString()}`, {
         method: "GET",
         cache: "no-store",
@@ -339,7 +375,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, nextCursor]);
+  }, [isLoadingMore, nextCursor, initialFilter]);
 
   useEffect(() => {
     if (!sentinelRef.current || !nextCursor || isLoadingMore) {
@@ -393,7 +429,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
       setPendingJumpKey(null);
       setLoadError("선택한 월의 사진을 찾을 수 없어요.");
     }
-  }, [isLoadingMore, loadMore, nextCursor, pendingJumpKey, reduceMotion, monthGroups.length]);
+  }, [isLoadingMore, loadMore, nextCursor, pendingJumpKey, reduceMotion]);
 
   const openLightbox = (
     targetItems: PhotoItem[],
@@ -571,17 +607,15 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
         id="gallery"
         className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
       >
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
               사진 모아보기
             </h2>
-            <p className="mt-1 text-[0.9rem] leading-[1.55] text-[color:var(--color-muted)]">
-              빠르게 탐색하고 오래 회상할 수 있게 월별로 정리했어요.
-            </p>
+            <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">최근순 정렬</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[0.73rem] font-semibold">
-            <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1 text-[color:var(--color-brand-strong)]">
+            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1 text-[color:var(--color-muted)]">
               총 {summary.totalCount}장
             </span>
             <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1 text-[color:var(--color-muted)]">
@@ -611,22 +645,114 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
           </article>
         ) : null}
 
-        <section ref={highlightsRef} className="mb-4 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">대표컷 · 하이라이트</h3>
-            <span className="text-[0.74rem] font-semibold text-[color:var(--color-muted)]">
-              처음 오는 가족도 바로 볼 수 있어요
-            </span>
+        <section className="mb-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("timeline")}
+              className={`rounded-full px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "timeline"
+                ? "bg-[color:var(--color-brand)] text-white"
+                : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                }`}
+            >
+              최신순
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("tags")}
+              className={`rounded-full px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "tags"
+                ? "bg-[color:var(--color-brand)] text-white"
+                : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                }`}
+            >
+              태그 앨범
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {viewMode === "tags" ? (
+            <>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {tagAlbums.map((album) => (
+                  <button
+                    key={`tag-${album.tag}`}
+                    type="button"
+                    onClick={() => setActiveTag(album.tag)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold ${activeTag === album.tag
+                      ? "bg-[color:var(--color-brand)] text-white"
+                      : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                      }`}
+                  >
+                    #{album.tag} · {album.count}
+                  </button>
+                ))}
+              </div>
+
+              {activeTag ? (
+                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                  {activeTagItems.map((item, index) => (
+                    <button
+                      key={`tag-item-${item.id}`}
+                      type="button"
+                      onClick={(event) => openLightbox(activeTagItems, index, event.currentTarget)}
+                      className="group relative overflow-hidden rounded-[0.82rem] bg-[#eceff3] text-left"
+                      aria-label={`${item.caption} 확대 보기`}
+                    >
+                      <Image
+                        src={item.thumbSrc ?? item.src}
+                        alt={item.alt}
+                        width={420}
+                        height={420}
+                        sizes="(max-width: 767px) 50vw, 280px"
+                        className="motion-safe-scale aspect-square w-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                  {tagAlbums.map((album) => (
+                    <button
+                      key={`album-${album.tag}`}
+                      type="button"
+                      onClick={() => setActiveTag(album.tag)}
+                      className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white text-left"
+                    >
+                      <div className="relative bg-[#eceff3]">
+                        <Image
+                          src={album.cover.thumbSrc ?? album.cover.src}
+                          alt={`${album.tag} 태그 대표 사진`}
+                          width={520}
+                          height={420}
+                          sizes="(max-width: 767px) 50vw, 280px"
+                          className="aspect-[4/3] w-full object-cover"
+                        />
+                      </div>
+                      <div className="px-2.5 py-2">
+                        <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{album.tag}</p>
+                        <p className="text-[0.7rem] text-[color:var(--color-muted)]">{album.count}장</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
+        </section>
+
+        {viewMode === "timeline" ? (
+        <section ref={highlightsRef} className="mb-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">대표컷 · 하이라이트</h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
             {effectiveHighlights.featured.map((image, index) => (
               <button
                 key={`featured-${image.id}`}
                 data-highlight-card
                 type="button"
                 onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
-                className="group relative overflow-hidden rounded-[0.96rem] bg-[#f3e2d8] text-left shadow-[0_9px_18px_rgba(85,39,54,0.1)]"
+                className="group relative overflow-hidden rounded-[0.96rem] bg-[#eceff3] text-left shadow-[0_4px_12px_rgba(32,33,36,0.08)]"
                 aria-label={`${image.caption} 확대 보기`}
               >
                 <Image
@@ -638,26 +764,23 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
                   className="motion-safe-scale aspect-[4/3] w-full object-cover"
                   priority
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2.5 pt-9">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/52 to-transparent px-2.5 pb-2.5 pt-9">
                   <p className="text-[0.78rem] font-semibold text-white/95">{image.caption}</p>
                   <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
                 </div>
-                <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.64rem] font-semibold text-[color:var(--color-ink)]">
-                  대표컷
-                </span>
               </button>
             ))}
           </div>
 
           {effectiveHighlights.highlights.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {effectiveHighlights.highlights.map((image, index) => (
                 <button
                   key={`highlight-${image.id}`}
                   data-highlight-card
                   type="button"
                   onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
-                  className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left"
+                  className="group relative overflow-hidden rounded-[0.9rem] bg-[#eceff3] text-left"
                   aria-label={`${image.caption} 확대 보기`}
                 >
                   <Image
@@ -673,9 +796,11 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
             </div>
           ) : null}
         </section>
+        ) : null}
 
-        <section id="monthly-archive" className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-1.5" aria-label="연도 빠른 이동">
+        {viewMode === "timeline" ? (
+        <section id="monthly-archive" className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {years.map((year) => (
               <button
                 key={`year-${year}`}
@@ -691,7 +816,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
             ))}
           </div>
 
-          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="월별 빠른 이동">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleMonthStats.map((group) => (
               <button
                 key={`${group.key}-jump`}
@@ -720,7 +845,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
               <article
                 key={group.key}
                 id={`archive-${group.key}`}
-                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
+                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_4px_12px_rgba(32,33,36,0.08)]"
               >
                 <button
                   type="button"
@@ -736,13 +861,13 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
                 </button>
 
                 {isOpen ? (
-                  <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--color-line)] p-3 md:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-1.5 border-t border-[color:var(--color-line)] p-2 md:grid-cols-3">
                     {group.items.map((image, index) => (
                       <button
                         key={image.id}
                         type="button"
                         onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left shadow-[0_7px_15px_rgba(85,39,54,0.1)]"
+                        className="group relative overflow-hidden rounded-[0.9rem] bg-[#eceff3] text-left shadow-[0_3px_10px_rgba(32,33,36,0.07)]"
                         aria-label={`${image.caption} 확대 보기`}
                       >
                         <Image
@@ -753,9 +878,6 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
                           sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
                           className="motion-safe-scale aspect-square w-full object-cover"
                         />
-                        <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.64rem] font-semibold text-[color:var(--color-ink)]">
-                          {image.visibility === "admin" ? "관리자 전용" : "가족 전용"}
-                        </span>
                       </button>
                     ))}
                   </div>
@@ -764,6 +886,7 @@ export function GallerySection({ initialData, initialHighlights }: GallerySectio
             );
           })}
         </section>
+        ) : null}
 
         <div ref={sentinelRef} className="mt-4 h-1 w-full" aria-hidden="true" />
 
