@@ -1,9 +1,14 @@
 export type GalleryImage = {
   id: string;
   src: string;
+  thumbSrc?: string | null;
   alt: string;
   caption: string;
   takenAt: string;
+  updatedAt?: string;
+  visibility?: "family" | "admin";
+  isFeatured?: boolean;
+  featuredRank?: number | null;
 };
 
 export const galleryImages: GalleryImage[] = [

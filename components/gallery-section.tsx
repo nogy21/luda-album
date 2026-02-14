@@ -1,22 +1,87 @@
 "use client";
 
-import Image from "next/image";
 import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
-import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
+import { formatMonthMetaLabel } from "@/lib/gallery/time";
+import type {
+  HighlightResponse,
+  PhotoItem,
+  PhotoListResponse,
+  YearMonthStat,
+} from "@/lib/gallery/types";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
-gsap.registerPlugin(ScrollTrigger);
+const PAGE_LIMIT = 36;
 
-const HIGHLIGHT_COUNT = 6;
-const ARCHIVE_BATCH_SIZE = 12;
+type GallerySectionProps = {
+  initialData: PhotoListResponse;
+  initialHighlights: HighlightResponse;
+};
 
-const sortByTakenAtDesc = (a: GalleryImage, b: GalleryImage) => {
-  return +new Date(b.takenAt) - +new Date(a.takenAt);
+type LightboxState = {
+  items: PhotoItem[];
+  index: number;
+};
+
+type MonthGroup = {
+  key: string;
+  label: string;
+  year: number;
+  month: number;
+  latestTakenAt: string;
+  latestUpdatedAt: string;
+  items: PhotoItem[];
+};
+
+const dedupeById = (items: PhotoItem[]) => {
+  return Array.from(new Map(items.map((item) => [item.id, item])).values());
+};
+
+const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {
+  return +new Date(right.takenAt) - +new Date(left.takenAt);
+};
+
+const buildMonthGroups = (items: PhotoItem[]): MonthGroup[] => {
+  const groups = new Map<string, MonthGroup>();
+
+  for (const item of [...items].sort(sortByTakenAtDesc)) {
+    const date = new Date(item.takenAt);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: `${year}년 ${month}월`,
+        year,
+        month,
+        latestTakenAt: item.takenAt,
+        latestUpdatedAt: item.updatedAt,
+        items: [],
+      });
+    }
+
+    const group = groups.get(key);
+
+    if (!group) {
+      continue;
+    }
+
+    group.items.push(item);
+
+    if (+new Date(item.updatedAt) > +new Date(group.latestUpdatedAt)) {
+      group.latestUpdatedAt = item.updatedAt;
+    }
+  }
+
+  return [...groups.values()].sort((left, right) => {
+    return +new Date(right.latestTakenAt) - +new Date(left.latestTakenAt);
+  });
 };
 
 const formatDateLabel = (takenAt: string) => {
@@ -24,31 +89,137 @@ const formatDateLabel = (takenAt: string) => {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
-type GallerySectionProps = {
-  images?: GalleryImage[];
-};
-
-export function GallerySection({ images = galleryImages }: GallerySectionProps) {
-  const sortedImages = useMemo(() => [...images].sort(sortByTakenAtDesc), [images]);
-  const highlights = useMemo(() => sortedImages.slice(0, HIGHLIGHT_COUNT), [sortedImages]);
-  const monthGroups = useMemo(() => groupGalleryImagesByMonth(sortedImages), [sortedImages]);
-
-  const [openMonthKeys, setOpenMonthKeys] = useState<string[]>(() =>
-    monthGroups[0] ? [monthGroups[0].key] : [],
+export function GallerySection({ initialData, initialHighlights }: GallerySectionProps) {
+  const [items, setItems] = useState<PhotoItem[]>(() => initialData.items);
+  const [summary, setSummary] = useState<PhotoListResponse["summary"]>(
+    initialData.summary,
   );
-  const [visibleCountByMonth, setVisibleCountByMonth] = useState<Record<string, number>>(() =>
-    Object.fromEntries(monthGroups.map((group) => [group.key, ARCHIVE_BATCH_SIZE])),
-  );
-  const [lightbox, setLightbox] = useState<{ items: GalleryImage[]; index: number } | null>(null);
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const [highlights, setHighlights] = useState<HighlightResponse>(initialHighlights);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialData.nextCursor);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
+  const [openMonthKeys, setOpenMonthKeys] = useState<string[]>(() => {
+    const groups = buildMonthGroups(initialData.items);
+    return groups.slice(0, 2).map((group) => group.key);
+  });
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [pendingJumpKey, setPendingJumpKey] = useState<string | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const sectionRef = useRef<HTMLElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const highlightsRef = useRef<HTMLElement | null>(null);
   const lightboxPanelRef = useRef<HTMLDivElement | null>(null);
   const lightboxImageRef = useRef<HTMLDivElement | null>(null);
-  const portalRoot = typeof document === "undefined" ? null : document.body;
-  const monthJumpScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setItems(initialData.items);
+    setSummary(initialData.summary);
+    setHighlights(initialHighlights);
+    setNextCursor(initialData.nextCursor);
+    setPendingJumpKey(null);
+
+    const groups = buildMonthGroups(initialData.items);
+    setOpenMonthKeys(groups.slice(0, 2).map((group) => group.key));
+    setSelectedYear(groups[0]?.year ?? null);
+  }, [initialData, initialHighlights]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      setReduceMotion(media.matches);
+    };
+
+    update();
+    media.addEventListener("change", update);
+
+    return () => {
+      media.removeEventListener("change", update);
+    };
+  }, []);
+
+  const monthGroups = useMemo(() => buildMonthGroups(items), [items]);
+  const monthStatMap = useMemo(
+    () => new Map(summary.yearMonthStats.map((stat) => [stat.key, stat])),
+    [summary.yearMonthStats],
+  );
+
+  const years = useMemo(() => {
+    return Array.from(new Set(summary.yearMonthStats.map((stat) => stat.year)));
+  }, [summary.yearMonthStats]);
+
+  useEffect(() => {
+    if (selectedYear || years.length === 0) {
+      return;
+    }
+
+    setSelectedYear(years[0]);
+  }, [selectedYear, years]);
+
+  const visibleMonthGroups = useMemo(() => {
+    if (!selectedYear) {
+      return monthGroups;
+    }
+
+    return monthGroups.filter((group) => group.year === selectedYear);
+  }, [monthGroups, selectedYear]);
+  const visibleMonthStats = useMemo(() => {
+    if (!selectedYear) {
+      return summary.yearMonthStats;
+    }
+
+    return summary.yearMonthStats.filter((stat) => stat.year === selectedYear);
+  }, [selectedYear, summary.yearMonthStats]);
+
+  const effectiveHighlights = useMemo(() => {
+    const featured = highlights.featured.length > 0 ? highlights.featured : items.slice(0, 2);
+    const highlightItems = highlights.highlights.length > 0 ? highlights.highlights : items.slice(2, 8);
+
+    return {
+      featured,
+      highlights: highlightItems,
+    };
+  }, [highlights, items]);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      return;
+    }
+
+    const section = highlightsRef.current;
+
+    if (!section) {
+      return;
+    }
+
+    const cards = section.querySelectorAll<HTMLElement>("[data-highlight-card]");
+
+    if (cards.length === 0) {
+      return;
+    }
+
+    const tween = gsap.fromTo(
+      cards,
+      { opacity: 0, y: 10, scale: 0.986 },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.34,
+        ease: "power2.out",
+        stagger: 0.05,
+      },
+    );
+
+    return () => {
+      tween.kill();
+    };
+  }, [reduceMotion, effectiveHighlights.featured.length, effectiveHighlights.highlights.length]);
 
   useEffect(() => {
     if (!lightbox) {
@@ -110,189 +281,6 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
     };
   }, [lightbox]);
 
-  const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
-  const latestUpdatedLabel = monthGroups[0]?.updatedLabel ?? "업데이트 정보 없음";
-
-  const openLightbox = (
-    items: GalleryImage[],
-    index: number,
-    triggerElement: HTMLButtonElement,
-  ) => {
-    triggerRef.current = triggerElement;
-    setLightbox({ items, index });
-  };
-
-  const closeLightbox = () => {
-    setLightbox(null);
-    window.requestAnimationFrame(() => {
-      triggerRef.current?.focus();
-    });
-  };
-
-  const showPrevious = () => {
-    setLightbox((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        index: (current.index - 1 + current.items.length) % current.items.length,
-      };
-    });
-  };
-
-  const showNext = () => {
-    setLightbox((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        index: (current.index + 1) % current.items.length,
-      };
-    });
-  };
-
-  const isMonthOpen = (key: string) => {
-    return openMonthKeys.includes(key);
-  };
-
-  const toggleMonth = (key: string) => {
-    setOpenMonthKeys((current) =>
-      current.includes(key) ? current.filter((monthKey) => monthKey !== key) : [...current, key],
-    );
-  };
-
-  const loadMore = (monthKey: string) => {
-    setVisibleCountByMonth((current) => ({
-      ...current,
-      [monthKey]: (current[monthKey] ?? ARCHIVE_BATCH_SIZE) + ARCHIVE_BATCH_SIZE,
-    }));
-  };
-
-  const getVisibleItems = (monthKey: string, items: GalleryImage[]) => {
-    const visible = visibleCountByMonth[monthKey] ?? ARCHIVE_BATCH_SIZE;
-    return items.slice(0, visible);
-  };
-
-  const hasMoreItems = (monthKey: string, totalCount: number) => {
-    const visible = visibleCountByMonth[monthKey] ?? ARCHIVE_BATCH_SIZE;
-    return totalCount > visible;
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) {
-            return;
-          }
-
-          const monthKey = entry.target.getAttribute("data-month-key");
-
-          if (!monthKey) {
-            return;
-          }
-
-          const group = monthGroups.find((item) => item.key === monthKey);
-          const visible = visibleCountByMonth[monthKey] ?? ARCHIVE_BATCH_SIZE;
-          const isOpen = openMonthKeys.includes(monthKey);
-
-          if (!group || !isOpen) {
-            return;
-          }
-
-          if (group.items.length > visible) {
-            loadMore(monthKey);
-          }
-        });
-      },
-      { rootMargin: "180px 0px" },
-    );
-
-    const sentinels = document.querySelectorAll<HTMLElement>("[data-month-sentinel]");
-    sentinels.forEach((sentinel) => observer.observe(sentinel));
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [monthGroups, openMonthKeys, visibleCountByMonth]);
-
-  const jumpToMonth = (monthKey: string) => {
-    const monthCard = document.getElementById(`archive-${monthKey}`);
-
-    if (!monthCard) {
-      return;
-    }
-
-    monthCard.scrollIntoView({
-      block: "start",
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  };
-
-  useEffect(() => {
-    if (reduceMotion) {
-      return;
-    }
-
-    const section = sectionRef.current;
-
-    if (!section) {
-      return;
-    }
-
-    const context = gsap.context(() => {
-      gsap.fromTo(
-        section,
-        { opacity: 0, y: 18 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.48,
-          ease: "power2.out",
-          scrollTrigger: {
-            trigger: section,
-            start: "top 88%",
-            once: true,
-          },
-        },
-      );
-
-      const cards = section.querySelectorAll<HTMLElement>("[data-photo-card]");
-
-      if (cards.length > 0) {
-        gsap.fromTo(
-          cards,
-          { opacity: 0, y: 12, scale: 0.986 },
-          {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            duration: 0.36,
-            ease: "power2.out",
-            stagger: 0.04,
-            scrollTrigger: {
-              trigger: section,
-              start: "top 82%",
-              once: true,
-            },
-          },
-        );
-      }
-    }, section);
-
-    return () => {
-      context.revert();
-    };
-  }, [reduceMotion, images.length]);
-
   useEffect(() => {
     if (reduceMotion || !lightbox) {
       return;
@@ -306,18 +294,192 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
     }
 
     const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
+
     timeline
-      .fromTo(panel, { opacity: 0, scale: 0.965, y: 14 }, { opacity: 1, scale: 1, y: 0, duration: 0.26 })
-      .fromTo(imageWrap, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.24 }, "<0.03");
+      .fromTo(panel, { opacity: 0, y: 12, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.26 })
+      .fromTo(imageWrap, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.22 }, "<0.03");
 
     return () => {
       timeline.kill();
     };
   }, [lightbox, lightbox?.index, reduceMotion]);
 
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || isLoadingMore) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    setLoadError(null);
+
+    try {
+      const params = new URLSearchParams({
+        cursor: nextCursor,
+        limit: `${PAGE_LIMIT}`,
+      });
+      const response = await fetch(`/api/photos?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const body = (await response.json()) as PhotoListResponse | { error?: string };
+
+      if (!response.ok || !(body as PhotoListResponse).items) {
+        throw new Error((body as { error?: string }).error || "사진을 더 불러오지 못했어요.");
+      }
+
+      const page = body as PhotoListResponse;
+
+      setItems((current) => dedupeById([...current, ...page.items]).sort(sortByTakenAtDesc));
+      setSummary(page.summary);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "사진을 불러오지 못했어요. 다시 시도해 주세요.",
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, nextCursor]);
+
+  useEffect(() => {
+    if (!sentinelRef.current || !nextCursor || isLoadingMore) {
+      return;
+    }
+
+    const target = sentinelRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+
+        if (!entry?.isIntersecting) {
+          return;
+        }
+
+        void loadMore();
+      },
+      { rootMargin: "160px 0px" },
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isLoadingMore, loadMore, nextCursor]);
+
+  useEffect(() => {
+    if (!pendingJumpKey) {
+      return;
+    }
+
+    const target = document.getElementById(`archive-${pendingJumpKey}`);
+
+    if (target) {
+      target.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+      setPendingJumpKey(null);
+      return;
+    }
+
+    if (nextCursor && !isLoadingMore) {
+      void loadMore();
+      return;
+    }
+
+    if (!nextCursor && !isLoadingMore) {
+      setPendingJumpKey(null);
+      setLoadError("선택한 월의 사진을 찾을 수 없어요.");
+    }
+  }, [isLoadingMore, loadMore, nextCursor, pendingJumpKey, reduceMotion, monthGroups.length]);
+
+  const openLightbox = (
+    targetItems: PhotoItem[],
+    index: number,
+    triggerElement: HTMLButtonElement,
+  ) => {
+    triggerRef.current = triggerElement;
+    setLightbox({ items: targetItems, index });
+  };
+
+  const closeLightbox = () => {
+    setLightbox(null);
+    window.requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
+  };
+
+  const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
+  const portalRoot = typeof document !== "undefined" ? document.body : null;
+
+  const toggleMonth = (monthKey: string) => {
+    setOpenMonthKeys((current) =>
+      current.includes(monthKey)
+        ? current.filter((key) => key !== monthKey)
+        : [...current, monthKey],
+    );
+  };
+
+  const jumpToMonth = (monthKey: string) => {
+    const target = document.getElementById(`archive-${monthKey}`);
+
+    if (!target) {
+      setPendingJumpKey(monthKey);
+      return;
+    }
+
+    target.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
+  const openYear = (year: number) => {
+    setSelectedYear(year);
+
+    const firstMonth = summary.yearMonthStats.find((stat) => stat.year === year);
+
+    if (firstMonth) {
+      jumpToMonth(firstMonth.key);
+    }
+  };
+
+  const selectedMonthMeta = (group: MonthGroup): YearMonthStat | null => {
+    return monthStatMap.get(group.key) ?? null;
+  };
+
+  const summaryCard = effectiveHighlights.featured[0] ?? items[0] ?? null;
+  const summaryCardItems =
+    effectiveHighlights.featured.length > 0 ? effectiveHighlights.featured : items;
+
+  if (items.length === 0) {
+    return (
+      <section
+        id="gallery"
+        className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-4 shadow-[var(--shadow-soft)]"
+      >
+        <h2 className="text-[length:var(--text-section-title)] font-bold text-[color:var(--color-ink)]">
+          사진 모아보기
+        </h2>
+        <p className="mt-2 text-sm text-[color:var(--color-muted)]">아직 사진이 없어요</p>
+        <p className="mt-1 text-[0.84rem] text-[color:var(--color-muted)]">
+          첫 사진을 업로드하면 이 화면에 자동으로 반영돼요.
+        </p>
+        <Link
+          href="/admin"
+          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white"
+        >
+          첫 사진 올리기
+        </Link>
+      </section>
+    );
+  }
+
   const lightboxOverlay = selectedImage ? (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/88 p-3 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/88 p-3 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="갤러리 이미지 크게 보기"
@@ -327,19 +489,22 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
         }
       }}
     >
-      <div ref={lightboxPanelRef} className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
+      <div
+        ref={lightboxPanelRef}
+        className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
+      >
         <div ref={lightboxImageRef}>
           <Image
             src={selectedImage.src}
             alt={selectedImage.alt}
-            width={1000}
-            height={1200}
+            width={1100}
+            height={1300}
             sizes="(max-width: 768px) 92vw, 760px"
-            className="max-h-[78vh] w-full object-contain"
+            className="max-h-[80vh] w-full object-contain"
             priority
           />
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5 text-white">
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2 text-white">
           <div>
             <p className="line-clamp-1 text-sm font-semibold text-white/95">{selectedImage.caption}</p>
             <p className="text-[0.72rem] text-white/70">{formatDateLabel(selectedImage.takenAt)}</p>
@@ -349,7 +514,18 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
               <>
                 <button
                   type="button"
-                  onClick={showPrevious}
+                  onClick={() => {
+                    setLightbox((current) => {
+                      if (!current) {
+                        return current;
+                      }
+
+                      return {
+                        ...current,
+                        index: (current.index - 1 + current.items.length) % current.items.length,
+                      };
+                    });
+                  }}
                   className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
                   aria-label="이전 사진"
                 >
@@ -357,7 +533,18 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
                 </button>
                 <button
                   type="button"
-                  onClick={showNext}
+                  onClick={() => {
+                    setLightbox((current) => {
+                      if (!current) {
+                        return current;
+                      }
+
+                      return {
+                        ...current,
+                        index: (current.index + 1) % current.items.length,
+                      };
+                    });
+                  }}
                   className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
                   aria-label="다음 사진"
                 >
@@ -381,168 +568,235 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
   return (
     <>
       <section
-        ref={sectionRef}
         id="gallery"
         className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
       >
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
               사진 모아보기
             </h2>
-            <p className="mt-1 text-[0.86rem] text-[color:var(--color-muted)]">대표 컷과 월별 사진</p>
+            <p className="mt-1 text-[0.9rem] leading-[1.55] text-[color:var(--color-muted)]">
+              빠르게 탐색하고 오래 회상할 수 있게 월별로 정리했어요.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[0.74rem] font-semibold text-[color:var(--color-brand-strong)]">
-            <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1">
-              총 {images.length}장
+          <div className="flex flex-wrap items-center gap-1.5 text-[0.73rem] font-semibold">
+            <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1 text-[color:var(--color-brand-strong)]">
+              총 {summary.totalCount}장
             </span>
-            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1">
-              {latestUpdatedLabel}
+            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1 text-[color:var(--color-muted)]">
+              가족 전용
             </span>
           </div>
         </div>
 
-        <section className="mb-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(147,72,96,0.08)]">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">최근 하이라이트</h3>
+        {summaryCard ? (
+          <article className="mb-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3">
+            <p className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-brand-strong)]">
+              오늘의 추억
+            </p>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[0.96rem] font-semibold text-[color:var(--color-ink)]">{summaryCard.caption}</p>
+                <p className="text-[0.75rem] text-[color:var(--color-muted)]">{formatDateLabel(summaryCard.takenAt)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => openLightbox(summaryCardItems, 0, event.currentTarget)}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-3.5 text-[0.78rem] font-semibold text-[color:var(--color-muted)]"
+              >
+                크게 보기
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        <section ref={highlightsRef} className="mb-4 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">대표컷 · 하이라이트</h3>
             <span className="text-[0.74rem] font-semibold text-[color:var(--color-muted)]">
-              최근 {highlights.length}장
+              처음 오는 가족도 바로 볼 수 있어요
             </span>
           </div>
+
           <div className="grid grid-cols-2 gap-2">
-            {highlights.map((image, index) => (
+            {effectiveHighlights.featured.map((image, index) => (
               <button
-                key={image.id}
-                data-photo-card
+                key={`featured-${image.id}`}
+                data-highlight-card
                 type="button"
-                onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
-                className={`group relative overflow-hidden rounded-[0.92rem] bg-[#f3e2d8] text-left shadow-[0_7px_16px_rgba(85,39,54,0.1)] ${
-                  index === 0 ? "col-span-2" : ""
-                }`}
+                onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
+                className="group relative overflow-hidden rounded-[0.96rem] bg-[#f3e2d8] text-left shadow-[0_9px_18px_rgba(85,39,54,0.1)]"
                 aria-label={`${image.caption} 확대 보기`}
               >
                 <Image
-                  src={image.src}
+                  src={image.thumbSrc ?? image.src}
                   alt={image.alt}
-                  width={index === 0 ? 1024 : 420}
-                  height={index === 0 ? 640 : 560}
-                  sizes={
-                    index === 0
-                      ? "(max-width: 767px) 100vw, 760px"
-                      : "(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                  }
-                  className={`motion-safe-scale w-full object-cover ${
-                    index === 0 ? "aspect-[16/11]" : "aspect-square"
-                  }`}
-                  priority={index < 2}
+                  width={960}
+                  height={760}
+                  sizes="(max-width: 767px) 50vw, 420px"
+                  className="motion-safe-scale aspect-[4/3] w-full object-cover"
+                  priority
                 />
-                {index <= 1 ? (
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2.5 pb-2.5 pt-8 text-[0.74rem] font-semibold text-white/95">
-                    {image.caption}
-                  </span>
-                ) : null}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2.5 pt-9">
+                  <p className="text-[0.78rem] font-semibold text-white/95">{image.caption}</p>
+                  <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
+                </div>
+                <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.64rem] font-semibold text-[color:var(--color-ink)]">
+                  대표컷
+                </span>
               </button>
             ))}
           </div>
-        </section>
 
-        <section className="space-y-2.5">
-          <div id="monthly-archive" className="space-y-2">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
-            <div
-              ref={monthJumpScrollRef}
-              className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              aria-label="월별 빠른 이동"
-            >
-              {monthGroups.map((group) => (
+          {effectiveHighlights.highlights.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              {effectiveHighlights.highlights.map((image, index) => (
                 <button
-                  key={`${group.key}-jump`}
+                  key={`highlight-${image.id}`}
+                  data-highlight-card
                   type="button"
-                  onClick={() => jumpToMonth(group.key)}
-                  className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-white px-3 py-1.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
+                  onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
+                  className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left"
+                  aria-label={`${image.caption} 확대 보기`}
                 >
-                  {group.label}
+                  <Image
+                    src={image.thumbSrc ?? image.src}
+                    alt={image.alt}
+                    width={480}
+                    height={480}
+                    sizes="(max-width: 767px) 33vw, 220px"
+                    className="motion-safe-scale aspect-square w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
+          ) : null}
+        </section>
+
+        <section id="monthly-archive" className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="연도 빠른 이동">
+            {years.map((year) => (
+              <button
+                key={`year-${year}`}
+                type="button"
+                onClick={() => openYear(year)}
+                className={`rounded-full px-3 py-1.5 text-[0.74rem] font-semibold transition-colors ${selectedYear === year
+                  ? "bg-[color:var(--color-brand)] text-white"
+                  : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                  }`}
+              >
+                {year}년
+              </button>
+            ))}
           </div>
 
-          {monthGroups.map((group) => {
-            const open = isMonthOpen(group.key);
-            const visibleItems = getVisibleItems(group.key, group.items);
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="월별 빠른 이동">
+            {visibleMonthStats.map((group) => (
+              <button
+                key={`${group.key}-jump`}
+                type="button"
+                onClick={() => jumpToMonth(group.key)}
+                className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-white px-3 py-1.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]"
+              >
+                {group.month}월
+              </button>
+            ))}
+          </div>
+
+          {visibleMonthGroups.map((group) => {
+            const monthStat = selectedMonthMeta(group);
+            const isOpen = openMonthKeys.includes(group.key);
+            const metaLabel =
+              monthStat?.metaLabel ??
+              formatMonthMetaLabel(
+                group.year,
+                group.month,
+                group.items.length,
+                group.latestUpdatedAt,
+              );
 
             return (
               <article
                 key={group.key}
                 id={`archive-${group.key}`}
-                data-photo-card
-                 className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
+                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
               >
                 <button
                   type="button"
                   onClick={() => toggleMonth(group.key)}
-                  aria-expanded={open}
+                  aria-expanded={isOpen}
                   className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
                 >
                   <div>
                     <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.72rem] font-medium text-[color:var(--color-muted)]">
-                      <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2 py-0.5">
-                        {group.items.length}장의 기록
-                      </span>
-                      <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2 py-0.5 text-[color:var(--color-brand-strong)]">
-                        {group.updatedLabel}
-                      </span>
-                    </div>
+                    <p className="mt-1 text-[0.72rem] font-medium text-[color:var(--color-muted)]">{metaLabel}</p>
                   </div>
-                  <span className="text-base font-semibold text-[color:var(--color-muted)]">
-                    {open ? "−" : "+"}
-                  </span>
+                  <span className="text-base font-semibold text-[color:var(--color-muted)]">{isOpen ? "−" : "+"}</span>
                 </button>
 
-                {open ? (
-                  <div className="space-y-2.5 border-t border-[color:var(--color-line)] p-3">
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                      {visibleItems.map((image, index) => (
-                        <button
-                          key={image.id}
-                          data-photo-card
-                          type="button"
-                          onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                          className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left shadow-[0_7px_15px_rgba(85,39,54,0.1)]"
-                          aria-label={`${image.caption} 확대 보기`}
-                        >
-                          <Image
-                            src={image.src}
-                            alt={image.alt}
-                            width={420}
-                            height={560}
-                            sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                            className="motion-safe-scale aspect-square w-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-
-                    {hasMoreItems(group.key, group.items.length) ? (
-                      <>
-                        <div data-month-sentinel data-month-key={group.key} className="h-1 w-full" />
-                        <button
-                          type="button"
-                          onClick={() => loadMore(group.key)}
-                          className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
-                        >
-                          더 불러오기
-                        </button>
-                      </>
-                    ) : null}
+                {isOpen ? (
+                  <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--color-line)] p-3 md:grid-cols-3">
+                    {group.items.map((image, index) => (
+                      <button
+                        key={image.id}
+                        type="button"
+                        onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
+                        className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left shadow-[0_7px_15px_rgba(85,39,54,0.1)]"
+                        aria-label={`${image.caption} 확대 보기`}
+                      >
+                        <Image
+                          src={image.thumbSrc ?? image.src}
+                          alt={image.alt}
+                          width={420}
+                          height={560}
+                          sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
+                          className="motion-safe-scale aspect-square w-full object-cover"
+                        />
+                        <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.64rem] font-semibold text-[color:var(--color-ink)]">
+                          {image.visibility === "admin" ? "관리자 전용" : "가족 전용"}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 ) : null}
               </article>
             );
           })}
         </section>
+
+        <div ref={sentinelRef} className="mt-4 h-1 w-full" aria-hidden="true" />
+
+        {isLoadingMore ? (
+          <p className="mt-3 rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]">
+            사진을 더 불러오는 중…
+          </p>
+        ) : null}
+
+        {loadError ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[0.84rem] text-rose-700">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              className="inline-flex min-h-11 items-center rounded-full border border-rose-200 bg-white px-3 text-[0.78rem] font-semibold"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : null}
+
+        {nextCursor && !isLoadingMore ? (
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-4 text-sm font-semibold text-[color:var(--color-muted)]"
+          >
+            더 불러오기
+          </button>
+        ) : null}
       </section>
+
       {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}
     </>
   );
