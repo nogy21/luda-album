@@ -11,7 +11,7 @@ import {
   getInitialFeaturedImages,
   getShuffledFeaturedImages,
 } from "@/lib/gallery/featured";
-import { galleryImages } from "@/lib/gallery/images";
+import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
 import { markHeroIntroSeen, shouldRunHeroIntro } from "@/lib/ui/hero-intro";
 import { buildSoftRevealTransition } from "@/lib/ui/motion-config";
 
@@ -92,9 +92,13 @@ export function AppShell({ children }: AppShellProps) {
   );
 }
 
-export function CoverCard() {
+type CoverCardProps = {
+  images?: GalleryImage[];
+};
+
+export function CoverCard({ images = galleryImages }: CoverCardProps) {
   const [featuredImages, setFeaturedImages] = useState(() =>
-    getInitialFeaturedImages(galleryImages),
+    getInitialFeaturedImages(images),
   );
   const [ctaMessage, setCtaMessage] = useState<string | null>(null);
   const shouldReduceMotion = useReducedMotion();
@@ -104,7 +108,7 @@ export function CoverCard() {
   const allowanceBurstRef = useRef<HTMLSpanElement | null>(null);
   const ctaNoticeTimerRef = useRef<number | null>(null);
   const latestDateLabel = useMemo(() => {
-    const sorted = [...galleryImages].sort(
+    const sorted = [...images].sort(
       (left, right) => +new Date(right.takenAt) - +new Date(left.takenAt),
     );
     const latest = sorted[0];
@@ -115,7 +119,7 @@ export function CoverCard() {
 
     const date = new Date(latest.takenAt);
     return `${date.getMonth() + 1}월 ${date.getDate()}일`;
-  }, []);
+  }, [images]);
   const tileClasses = useMemo(
     () => [
       "col-span-4 row-span-4",
@@ -126,6 +130,10 @@ export function CoverCard() {
     ],
     [],
   );
+
+  useEffect(() => {
+    setFeaturedImages(getInitialFeaturedImages(images));
+  }, [images]);
 
   useEffect(() => {
     if (typeof window === "undefined" || reduceMotion) {
@@ -257,12 +265,12 @@ export function CoverCard() {
             Family Memory
           </p>
           <p className="mt-1 text-[0.78rem] font-medium text-[color:var(--color-muted)]">
-            총 {galleryImages.length}장 · {latestDateLabel} 업데이트
+            총 {images.length}장 · {latestDateLabel} 업데이트
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setFeaturedImages(getShuffledFeaturedImages(galleryImages))}
+          onClick={() => setFeaturedImages(getShuffledFeaturedImages(images))}
           className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.78rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
         >
           하이라이트 새로 섞기

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/admin/session";
+import { createGalleryImageRecord } from "@/lib/gallery/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
   const uploaded: Array<{
     name: string;
     path: string;
+    src: string;
     size: number;
     type: string;
   }> = [];
@@ -99,9 +101,47 @@ export async function POST(request: Request) {
       continue;
     }
 
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(bucket).getPublicUrl(path);
+
+    if (!publicUrl) {
+      await supabase.storage.from(bucket).remove([path]);
+      failed.push({
+        name: file.name,
+        reason: "공개 URL 생성에 실패했어요.",
+        size: file.size,
+        type: file.type,
+      });
+      continue;
+    }
+
+    try {
+      await createGalleryImageRecord(supabase, {
+        src: publicUrl,
+        storagePath: path,
+        originalName: file.name,
+        type: file.type,
+        size: file.size,
+      });
+    } catch (recordError) {
+      await supabase.storage.from(bucket).remove([path]);
+      failed.push({
+        name: file.name,
+        reason:
+          recordError instanceof Error
+            ? `DB 기록 실패: ${recordError.message}`
+            : "DB 기록에 실패했어요.",
+        size: file.size,
+        type: file.type,
+      });
+      continue;
+    }
+
     uploaded.push({
       name: file.name,
       path,
+      src: publicUrl,
       size: file.size,
       type: file.type,
     });
@@ -115,4 +155,3 @@ export async function POST(request: Request) {
     failed,
   });
 }
-

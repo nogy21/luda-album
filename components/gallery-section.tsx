@@ -22,8 +22,12 @@ const formatDateLabel = (takenAt: string) => {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
-export function GallerySection() {
-  const sortedImages = useMemo(() => [...galleryImages].sort(sortByTakenAtDesc), []);
+type GallerySectionProps = {
+  images?: GalleryImage[];
+};
+
+export function GallerySection({ images = galleryImages }: GallerySectionProps) {
+  const sortedImages = useMemo(() => [...images].sort(sortByTakenAtDesc), [images]);
   const highlights = useMemo(() => sortedImages.slice(0, HIGHLIGHT_COUNT), [sortedImages]);
   const monthGroups = useMemo(() => groupGalleryImagesByMonth(sortedImages), [sortedImages]);
 
@@ -253,7 +257,7 @@ export function GallerySection() {
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[0.74rem] font-semibold text-[color:var(--color-brand-strong)]">
             <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1">
-              총 {galleryImages.length}장
+              총 {images.length}장
             </span>
             <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1">
               {latestUpdatedLabel}
