@@ -6,6 +6,9 @@ export type UploadQueueItem = {
   status: UploadItemStatus;
   progress: number;
   uploadedPath?: string;
+  uploadedPhotoId?: string;
+  visibility?: "family" | "admin";
+  isFeatured?: boolean;
   errorReason?: string;
 };
 
@@ -25,12 +28,16 @@ const clampProgress = (value: number) => {
   return value;
 };
 
-export const createUploadQueue = (files: File[]): UploadQueueItem[] => {
+export const createUploadQueue = (
+  files: File[],
+  visibility: "family" | "admin" = "family",
+): UploadQueueItem[] => {
   const timestamp = Date.now();
 
   return files.map((file, index) => ({
     id: `${timestamp}-${index}-${file.name}-${file.size}`,
     file,
+    visibility,
     status: "queued",
     progress: 0,
   }));
@@ -59,6 +66,10 @@ export const markUploadSuccess = (
   queue: UploadQueueItem[],
   itemId: string,
   uploadedPath: string,
+  options?: {
+    uploadedPhotoId?: string;
+    visibility?: "family" | "admin";
+  },
 ): UploadQueueItem[] => {
   return queue.map((item) =>
     item.id === itemId
@@ -67,6 +78,8 @@ export const markUploadSuccess = (
           status: "success",
           progress: 1,
           uploadedPath,
+          uploadedPhotoId: options?.uploadedPhotoId ?? item.uploadedPhotoId,
+          visibility: options?.visibility ?? item.visibility,
           errorReason: undefined,
         }
       : item,
@@ -111,4 +124,3 @@ export const getQueueSummary = (queue: UploadQueueItem[]) => {
     totalProgress,
   };
 };
-

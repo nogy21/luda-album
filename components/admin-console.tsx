@@ -13,7 +13,12 @@ import {
 } from "@/lib/admin/upload-queue";
 
 type UploadApiResult = {
-  uploaded?: Array<{ path: string; name: string }>;
+  uploaded?: Array<{
+    id: string;
+    path: string;
+    name: string;
+    visibility: "family" | "admin";
+  }>;
   failed?: Array<{ reason: string; name: string }>;
   error?: { message?: string };
 };
@@ -21,17 +26,21 @@ type UploadApiResult = {
 type UploadResult = {
   ok: boolean;
   uploadedPath?: string;
+  uploadedPhotoId?: string;
+  visibility?: "family" | "admin";
   errorReason?: string;
 };
 
 const uploadSingleFile = (
   file: File,
+  visibility: "family" | "admin",
   onProgress: (progress: number) => void,
 ): Promise<UploadResult> => {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("files", file);
+    formData.append("visibility", visibility);
 
     xhr.open("POST", "/api/admin/upload");
     xhr.responseType = "json";
@@ -50,7 +59,12 @@ const uploadSingleFile = (
       const failed = body.failed?.[0];
 
       if (xhr.status >= 200 && xhr.status < 300 && uploaded) {
-        resolve({ ok: true, uploadedPath: uploaded.path });
+        resolve({
+          ok: true,
+          uploadedPath: uploaded.path,
+          uploadedPhotoId: uploaded.id,
+          visibility: uploaded.visibility,
+        });
         return;
       }
 
@@ -82,6 +96,8 @@ export function AdminConsole() {
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [statusText, setStatusText] = useState("업로드할 사진을 선택해 주세요.");
+  const [uploadVisibility, setUploadVisibility] = useState<"family" | "admin">("family");
+  const [togglingPhotoId, setTogglingPhotoId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -139,18 +155,25 @@ export function AdminConsole() {
     let failureCount = 0;
 
     for (const item of targets) {
+      const itemVisibility = item.visibility ?? uploadVisibility;
+
       setQueue((current) => setUploadProgress(current, item.id, 0, "uploading"));
 
-      const result = await uploadSingleFile(item.file, (progress) => {
+      const result = await uploadSingleFile(item.file, itemVisibility, (progress) => {
         setQueue((current) =>
           setUploadProgress(current, item.id, progress, "uploading"),
         );
       });
 
       if (result.ok && result.uploadedPath) {
+        const uploadedPath = result.uploadedPath;
+
         successCount += 1;
         setQueue((current) =>
-          markUploadSuccess(current, item.id, result.uploadedPath as string),
+          markUploadSuccess(current, item.id, uploadedPath, {
+            uploadedPhotoId: result.uploadedPhotoId,
+            visibility: result.visibility ?? itemVisibility,
+          }),
         );
         continue;
       }
@@ -176,7 +199,7 @@ export function AdminConsole() {
       return;
     }
 
-    const items = createUploadQueue(Array.from(files));
+    const items = createUploadQueue(Array.from(files), uploadVisibility);
     setQueue((current) => [...current, ...items]);
     setStatusText(`${items.length}개 파일을 업로드 대기열에 추가했어요.`);
   };
@@ -199,6 +222,79 @@ export function AdminConsole() {
       ),
     );
     await runUpload(failedItems);
+  };
+
+  const handleToggleFeatured = async (item: UploadQueueItem) => {
+    if (!item.uploadedPhotoId || togglingPhotoId || isUploading) {
+      return;
+    }
+
+    const previous = Boolean(item.isFeatured);
+    const next = !previous;
+
+    setTogglingPhotoId(item.uploadedPhotoId);
+    setQueue((current) =>
+      current.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              isFeatured: next,
+            }
+          : entry,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/admin/photos/${item.uploadedPhotoId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isFeatured: next,
+          featuredRank: next ? 1 : null,
+        }),
+      });
+      const data = (await response.json()) as {
+        item?: { isFeatured?: boolean };
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "대표컷 저장에 실패했어요.");
+      }
+
+      setQueue((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                isFeatured: Boolean(data.item?.isFeatured),
+              }
+            : entry,
+        ),
+      );
+
+      setStatusText(next ? "대표컷으로 지정했어요." : "대표컷 지정을 해제했어요.");
+    } catch (error) {
+      setQueue((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                isFeatured: previous,
+              }
+            : entry,
+        ),
+      );
+      setStatusText(
+        error instanceof Error
+          ? error.message
+          : "대표컷 설정 중 오류가 발생했어요.",
+      );
+    } finally {
+      setTogglingPhotoId(null);
+    }
   };
 
   if (!ready) {
@@ -306,6 +402,32 @@ export function AdminConsole() {
       </p>
 
       <section className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-[color:var(--color-ink)]">업로드 범위</p>
+          <div className="flex items-center gap-2">
+            <label className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-line)] bg-white px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+              <input
+                type="radio"
+                name="visibility"
+                value="family"
+                checked={uploadVisibility === "family"}
+                onChange={() => setUploadVisibility("family")}
+              />
+              가족 전용
+            </label>
+            <label className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-line)] bg-white px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+              <input
+                type="radio"
+                name="visibility"
+                value="admin"
+                checked={uploadVisibility === "admin"}
+                onChange={() => setUploadVisibility("admin")}
+              />
+              관리자 전용
+            </label>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
@@ -381,9 +503,14 @@ export function AdminConsole() {
             >
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[color:var(--color-ink)]">{item.file.name}</p>
-                <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
-                  {item.status}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
+                    {item.visibility === "admin" ? "관리자 전용" : "가족 전용"}
+                  </span>
+                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
+                    {item.status}
+                  </span>
+                </div>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-[color:var(--color-brand-soft)]">
                 <div
@@ -400,6 +527,23 @@ export function AdminConsole() {
               {item.errorReason ? (
                 <p className="mt-1 text-[0.76rem] text-rose-700">{item.errorReason}</p>
               ) : null}
+              {item.uploadedPhotoId ? (
+                <button
+                  type="button"
+                  onClick={() => void handleToggleFeatured(item)}
+                  disabled={isUploading || togglingPhotoId === item.uploadedPhotoId}
+                  className={`mt-2 inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-xs font-semibold ${item.isFeatured
+                    ? "border border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                    : "border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-muted)]"
+                    } disabled:opacity-60`}
+                >
+                  {togglingPhotoId === item.uploadedPhotoId
+                    ? "저장 중…"
+                    : item.isFeatured
+                      ? "대표컷 해제"
+                      : "대표컷으로 지정"}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -411,4 +555,3 @@ export function AdminConsole() {
     </section>
   );
 }
-

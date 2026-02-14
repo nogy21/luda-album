@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/admin/session";
 import { createGalleryImageRecord } from "@/lib/gallery/repository";
+import type { PhotoVisibility } from "@/lib/gallery/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
@@ -14,6 +15,14 @@ const sanitizeFileName = (name: string) => {
 const buildUploadPath = (fileName: string) => {
   const datePath = new Date().toISOString().slice(0, 10).replaceAll("-", "/");
   return `${datePath}/${crypto.randomUUID()}-${sanitizeFileName(fileName)}`;
+};
+
+const normalizeVisibility = (value: FormDataEntryValue | null): PhotoVisibility => {
+  if (typeof value === "string" && value === "admin") {
+    return "admin";
+  }
+
+  return "family";
 };
 
 export async function POST(request: Request) {
@@ -28,6 +37,7 @@ export async function POST(request: Request) {
   }
 
   const formData = await request.formData();
+  const visibility = normalizeVisibility(formData.get("visibility"));
   const files = formData
     .getAll("files")
     .filter((entry): entry is File => entry instanceof File);
@@ -50,9 +60,12 @@ export async function POST(request: Request) {
 
   const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "luda-photos";
   const uploaded: Array<{
+    id: string;
     name: string;
     path: string;
     src: string;
+    thumbSrc: string | null;
+    visibility: PhotoVisibility;
     size: number;
     type: string;
   }> = [];
@@ -88,7 +101,7 @@ export async function POST(request: Request) {
     const { error } = await supabase.storage.from(bucket).upload(path, file, {
       upsert: false,
       contentType: file.type,
-      cacheControl: "3600",
+      cacheControl: "31536000",
     });
 
     if (error) {
@@ -117,12 +130,25 @@ export async function POST(request: Request) {
     }
 
     try {
-      await createGalleryImageRecord(supabase, {
+      const created = await createGalleryImageRecord(supabase, {
         src: publicUrl,
+        thumbSrc: publicUrl,
         storagePath: path,
         originalName: file.name,
         type: file.type,
         size: file.size,
+        visibility,
+      });
+
+      uploaded.push({
+        id: created.id,
+        name: file.name,
+        path,
+        src: publicUrl,
+        thumbSrc: created.thumbSrc,
+        visibility: created.visibility,
+        size: file.size,
+        type: file.type,
       });
     } catch (recordError) {
       await supabase.storage.from(bucket).remove([path]);
@@ -138,13 +164,6 @@ export async function POST(request: Request) {
       continue;
     }
 
-    uploaded.push({
-      name: file.name,
-      path,
-      src: publicUrl,
-      size: file.size,
-      type: file.type,
-    });
   }
 
   return NextResponse.json({
