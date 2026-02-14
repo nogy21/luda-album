@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useReducedMotion } from "motion/react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
 import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
-import { buildSoftRevealTransition } from "@/lib/ui/motion-config";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const HIGHLIGHT_COUNT = 6;
 const ARCHIVE_BATCH_SIZE = 12;
@@ -38,10 +40,15 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
     Object.fromEntries(monthGroups.map((group) => [group.key, ARCHIVE_BATCH_SIZE])),
   );
   const [lightbox, setLightbox] = useState<{ items: GalleryImage[]; index: number } | null>(null);
-  const shouldReduceMotion = useReducedMotion();
-  const reduceMotion = !!shouldReduceMotion;
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const lightboxPanelRef = useRef<HTMLDivElement | null>(null);
+  const lightboxImageRef = useRef<HTMLDivElement | null>(null);
   const portalRoot = typeof document === "undefined" ? null : document.body;
+  const monthJumpScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!lightbox) {
@@ -175,6 +182,139 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
     return totalCount > visible;
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          const monthKey = entry.target.getAttribute("data-month-key");
+
+          if (!monthKey) {
+            return;
+          }
+
+          const group = monthGroups.find((item) => item.key === monthKey);
+          const visible = visibleCountByMonth[monthKey] ?? ARCHIVE_BATCH_SIZE;
+          const isOpen = openMonthKeys.includes(monthKey);
+
+          if (!group || !isOpen) {
+            return;
+          }
+
+          if (group.items.length > visible) {
+            loadMore(monthKey);
+          }
+        });
+      },
+      { rootMargin: "180px 0px" },
+    );
+
+    const sentinels = document.querySelectorAll<HTMLElement>("[data-month-sentinel]");
+    sentinels.forEach((sentinel) => observer.observe(sentinel));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [monthGroups, openMonthKeys, visibleCountByMonth]);
+
+  const jumpToMonth = (monthKey: string) => {
+    const monthCard = document.getElementById(`archive-${monthKey}`);
+
+    if (!monthCard) {
+      return;
+    }
+
+    monthCard.scrollIntoView({
+      block: "start",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  };
+
+  useEffect(() => {
+    if (reduceMotion) {
+      return;
+    }
+
+    const section = sectionRef.current;
+
+    if (!section) {
+      return;
+    }
+
+    const context = gsap.context(() => {
+      gsap.fromTo(
+        section,
+        { opacity: 0, y: 18 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.48,
+          ease: "power2.out",
+          scrollTrigger: {
+            trigger: section,
+            start: "top 88%",
+            once: true,
+          },
+        },
+      );
+
+      const cards = section.querySelectorAll<HTMLElement>("[data-photo-card]");
+
+      if (cards.length > 0) {
+        gsap.fromTo(
+          cards,
+          { opacity: 0, y: 12, scale: 0.986 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.36,
+            ease: "power2.out",
+            stagger: 0.04,
+            scrollTrigger: {
+              trigger: section,
+              start: "top 82%",
+              once: true,
+            },
+          },
+        );
+      }
+    }, section);
+
+    return () => {
+      context.revert();
+    };
+  }, [reduceMotion, images.length]);
+
+  useEffect(() => {
+    if (reduceMotion || !lightbox) {
+      return;
+    }
+
+    const panel = lightboxPanelRef.current;
+    const imageWrap = lightboxImageRef.current;
+
+    if (!panel || !imageWrap) {
+      return;
+    }
+
+    const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
+    timeline
+      .fromTo(panel, { opacity: 0, scale: 0.965, y: 14 }, { opacity: 1, scale: 1, y: 0, duration: 0.26 })
+      .fromTo(imageWrap, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.24 }, "<0.03");
+
+    return () => {
+      timeline.kill();
+    };
+  }, [lightbox, lightbox?.index, reduceMotion]);
+
   const lightboxOverlay = selectedImage ? (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/88 p-3 backdrop-blur-[2px]"
@@ -187,16 +327,18 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
         }
       }}
     >
-      <div className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
-        <Image
-          src={selectedImage.src}
-          alt={selectedImage.alt}
-          width={1000}
-          height={1200}
-          sizes="(max-width: 768px) 92vw, 760px"
-          className="max-h-[78vh] w-full object-contain"
-          priority
-        />
+      <div ref={lightboxPanelRef} className="w-full max-w-3xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-black">
+        <div ref={lightboxImageRef}>
+          <Image
+            src={selectedImage.src}
+            alt={selectedImage.alt}
+            width={1000}
+            height={1200}
+            sizes="(max-width: 768px) 92vw, 760px"
+            className="max-h-[78vh] w-full object-contain"
+            priority
+          />
+        </div>
         <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5 text-white">
           <div>
             <p className="line-clamp-1 text-sm font-semibold text-white/95">{selectedImage.caption}</p>
@@ -238,22 +380,17 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
 
   return (
     <>
-      <motion.section
+      <section
+        ref={sectionRef}
         id="gallery"
         className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
-        initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.2 }}
-        transition={buildSoftRevealTransition(reduceMotion, 0.08)}
       >
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
               사진 모아보기
             </h2>
-            <p className="mt-1 text-[0.9rem] text-[color:var(--color-muted)]">
-              월별 기록과 대표 컷을 한 흐름으로 살펴보세요.
-            </p>
+            <p className="mt-1 text-[0.86rem] text-[color:var(--color-muted)]">대표 컷과 월별 사진</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[0.74rem] font-semibold text-[color:var(--color-brand-strong)]">
             <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1">
@@ -274,18 +411,15 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
           </div>
           <div className="grid grid-cols-2 gap-2">
             {highlights.map((image, index) => (
-              <motion.button
+              <button
                 key={image.id}
+                data-photo-card
                 type="button"
                 onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
                 className={`group relative overflow-hidden rounded-[0.92rem] bg-[#f3e2d8] text-left shadow-[0_7px_16px_rgba(85,39,54,0.1)] ${
                   index === 0 ? "col-span-2" : ""
                 }`}
                 aria-label={`${image.caption} 확대 보기`}
-                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={buildSoftRevealTransition(reduceMotion, 0.14 + index * 0.04)}
               >
                 <Image
                   src={image.src}
@@ -307,26 +441,42 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
                     {image.caption}
                   </span>
                 ) : null}
-              </motion.button>
+              </button>
             ))}
           </div>
         </section>
 
         <section className="space-y-2.5">
-          <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
+          <div id="monthly-archive" className="space-y-2">
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">월별 아카이브</h3>
+            <div
+              ref={monthJumpScrollRef}
+              className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              aria-label="월별 빠른 이동"
+            >
+              {monthGroups.map((group) => (
+                <button
+                  key={`${group.key}-jump`}
+                  type="button"
+                  onClick={() => jumpToMonth(group.key)}
+                  className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-white px-3 py-1.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
+                >
+                  {group.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {monthGroups.map((group) => {
             const open = isMonthOpen(group.key);
             const visibleItems = getVisibleItems(group.key, group.items);
 
             return (
-              <motion.article
+              <article
                 key={group.key}
-                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
-                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.12 }}
-                transition={buildSoftRevealTransition(reduceMotion, 0.1)}
+                id={`archive-${group.key}`}
+                data-photo-card
+                 className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
               >
                 <button
                   type="button"
@@ -356,6 +506,7 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
                       {visibleItems.map((image, index) => (
                         <button
                           key={image.id}
+                          data-photo-card
                           type="button"
                           onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
                           className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left shadow-[0_7px_15px_rgba(85,39,54,0.1)]"
@@ -374,21 +525,24 @@ export function GallerySection({ images = galleryImages }: GallerySectionProps) 
                     </div>
 
                     {hasMoreItems(group.key, group.items.length) ? (
-                      <button
-                        type="button"
-                        onClick={() => loadMore(group.key)}
-                        className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
-                      >
-                        더 불러오기
-                      </button>
+                      <>
+                        <div data-month-sentinel data-month-key={group.key} className="h-1 w-full" />
+                        <button
+                          type="button"
+                          onClick={() => loadMore(group.key)}
+                          className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
+                        >
+                          더 불러오기
+                        </button>
+                      </>
                     ) : null}
                   </div>
                 ) : null}
-              </motion.article>
+              </article>
             );
           })}
         </section>
-      </motion.section>
+      </section>
       {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}
     </>
   );

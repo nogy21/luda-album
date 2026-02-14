@@ -4,7 +4,6 @@ import gsap from "gsap";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -13,7 +12,6 @@ import {
 } from "@/lib/gallery/featured";
 import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
 import { markHeroIntroSeen, shouldRunHeroIntro } from "@/lib/ui/hero-intro";
-import { buildSoftRevealTransition } from "@/lib/ui/motion-config";
 
 type AppShellProps = {
   children: ReactNode;
@@ -72,7 +70,7 @@ export function AppShell({ children }: AppShellProps) {
                 key={tab.href}
                 href={tab.href}
                 className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${isActive
-                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_12px_24px_rgba(233,106,141,0.45)]"
+                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_12px_24px_rgba(233,106,141,0.35)]"
                   : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)] active:bg-[color:var(--color-brand-soft)]/90"
                   }`}
               >
@@ -97,16 +95,12 @@ type CoverCardProps = {
 };
 
 export function CoverCard({ images = galleryImages }: CoverCardProps) {
-  const [featuredImages, setFeaturedImages] = useState(() =>
-    getInitialFeaturedImages(images),
-  );
-  const [ctaMessage, setCtaMessage] = useState<string | null>(null);
-  const shouldReduceMotion = useReducedMotion();
-  const reduceMotion = !!shouldReduceMotion;
+  const [featuredImages, setFeaturedImages] = useState(() => getInitialFeaturedImages(images, 8));
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const heroRef = useRef<HTMLElement | null>(null);
-  const allowanceButtonRef = useRef<HTMLButtonElement | null>(null);
-  const allowanceBurstRef = useRef<HTMLSpanElement | null>(null);
-  const ctaNoticeTimerRef = useRef<number | null>(null);
   const latestDateLabel = useMemo(() => {
     const sorted = [...images].sort(
       (left, right) => +new Date(right.takenAt) - +new Date(left.takenAt),
@@ -125,14 +119,18 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       "col-span-4 row-span-4",
       "col-span-2 row-span-2",
       "col-span-2 row-span-2",
+      "col-span-2 row-span-2",
+      "col-span-2 row-span-2",
       "col-span-3 row-span-2",
       "col-span-3 row-span-2",
+      "col-span-2 row-span-2",
+      "col-span-2 row-span-2",
     ],
     [],
   );
 
   useEffect(() => {
-    setFeaturedImages(getInitialFeaturedImages(images));
+    setFeaturedImages(getInitialFeaturedImages(images, 8));
   }, [images]);
 
   useEffect(() => {
@@ -163,7 +161,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
         {
           opacity: 1,
           y: 0,
-          duration: 0.42,
+          duration: 0.44,
           ease: "power2.out",
           stagger: 0.07,
         },
@@ -178,99 +176,62 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
   }, [reduceMotion]);
 
   useEffect(() => {
-    return () => {
-      if (ctaNoticeTimerRef.current !== null) {
-        window.clearTimeout(ctaNoticeTimerRef.current);
-      }
-    };
-  }, []);
-
-  const runAllowanceBurst = () => {
-    if (ctaNoticeTimerRef.current !== null) {
-      window.clearTimeout(ctaNoticeTimerRef.current);
-    }
-
-    setCtaMessage("세뱃돈 부탁 메시지를 준비했어요.");
-    ctaNoticeTimerRef.current = window.setTimeout(() => {
-      setCtaMessage(null);
-    }, 1800);
-
     if (reduceMotion) {
       return;
     }
 
-    const button = allowanceButtonRef.current;
-    const burstRoot = allowanceBurstRef.current;
+    const hero = heroRef.current;
 
-    if (!button || !burstRoot) {
+    if (!hero) {
       return;
     }
 
-    const particles = Array.from(
-      burstRoot.querySelectorAll<HTMLElement>("[data-burst-particle]"),
-    );
+    const tiles = hero.querySelectorAll<HTMLElement>("[data-hero-tile]");
 
-    gsap.killTweensOf(button);
-    gsap.killTweensOf(particles);
+    if (tiles.length === 0) {
+      return;
+    }
 
-    gsap.fromTo(
-      button,
-      { scale: 1 },
+    const tween = gsap.fromTo(
+      tiles,
+      { opacity: 0, y: 10, scale: 0.985 },
       {
-        scale: 1.06,
-        duration: 0.12,
-        yoyo: true,
-        repeat: 1,
-        ease: "power1.out",
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.36,
+        ease: "power2.out",
+        stagger: 0.05,
       },
     );
 
-    gsap.set(particles, { x: 0, y: 0, opacity: 0, scale: 0.35 });
+    return () => {
+      tween.kill();
+    };
+  }, [shuffleSeed, reduceMotion, featuredImages.length]);
 
-    particles.forEach((particle, index) => {
-      const angle = (index / particles.length) * Math.PI * 2;
-      const x = Math.cos(angle) * 46;
-      const y = Math.sin(angle) * 26;
-
-      gsap.to(particle, {
-        opacity: 1,
-        scale: 1,
-        duration: 0.08,
-        delay: 0.02 + index * 0.01,
-        ease: "power1.out",
-      });
-      gsap.to(particle, {
-        x,
-        y,
-        opacity: 0,
-        scale: 0.3,
-        duration: 0.48,
-        delay: 0.08,
-        ease: "power2.out",
-      });
-    });
+  const handleShuffle = () => {
+    setFeaturedImages(getShuffledFeaturedImages(images, 8));
+    setShuffleSeed((value) => value + 1);
   };
 
   return (
-    <motion.section
+    <section
       ref={heroRef}
       className="mb-4 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-float)] sm:p-4.5"
-      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={buildSoftRevealTransition(reduceMotion, 0.04)}
     >
       <div className="mb-3.5 flex items-start justify-between gap-2.5">
         <div data-hero-intro="meta">
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
             Family Memory
           </p>
-          <p className="mt-1 text-[0.78rem] font-medium text-[color:var(--color-muted)]">
-            총 {images.length}장 · {latestDateLabel} 업데이트
+          <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
+            총 {images.length}장 · {latestDateLabel}
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setFeaturedImages(getShuffledFeaturedImages(images))}
+          onClick={handleShuffle}
           className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.78rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
         >
           하이라이트 새로 섞기
@@ -281,83 +242,52 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
         className="max-w-[20ch] text-[length:var(--text-hero-title)] font-bold leading-[1.24] tracking-[-0.02em] text-[color:var(--color-ink)]"
         data-hero-intro="title"
       >
-        루다의 첫 설날, 오늘의 인사를 사진으로 전해요.
+        루다의 오늘을 가장 빠르게 보는 앨범
       </h1>
-      <p
-        className="mt-2 max-w-[38ch] text-[0.94rem] leading-[1.65] text-[color:var(--color-muted)]"
-        data-hero-intro="description"
-      >
-        오늘 가장 빛난 순간부터 지난달 추억까지 이어서 보실 수 있어요. 먼저 이번 달 대표 컷을 확인해 보세요.
+      <p className="mt-2 text-[0.9rem] leading-[1.6] text-[color:var(--color-muted)]" data-hero-intro="copy">
+        첫 방문에서는 이번 달 대표컷부터, 다시 오면 성장 타임라인으로 바로 이어보세요.
       </p>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-2.5" data-hero-intro="actions">
         <a
           href="#gallery"
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.88rem] font-semibold text-white shadow-[0_12px_24px_rgba(233,106,141,0.34)] transition hover:bg-[color:var(--color-brand-strong)]"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.88rem] font-semibold text-white shadow-[0_12px_24px_rgba(233,106,141,0.26)] transition hover:bg-[color:var(--color-brand-strong)]"
         >
-          이번 달 추억 보기
+          이번 달 사진 보기
         </a>
-        <span className="relative inline-flex">
-          <button
-            ref={allowanceButtonRef}
-            type="button"
-            onClick={runAllowanceBurst}
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-4 py-2.5 text-[0.88rem] font-semibold text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-brand-soft)]"
-          >
-            용돈 주세요
-          </button>
-          <span
-            ref={allowanceBurstRef}
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0"
-          >
-            {Array.from({ length: 10 }).map((_, index) => (
-              <span
-                key={index}
-                data-burst-particle
-                className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[color:var(--color-brand)] opacity-0"
-              />
-            ))}
-          </span>
-        </span>
-        <Link
-          href="/guestbook"
-          className="inline-flex min-h-11 items-center justify-center rounded-full px-2 text-[0.83rem] font-semibold text-[color:var(--color-brand-strong)] underline decoration-[color:var(--color-brand)]/45 underline-offset-4"
+        <a
+          href="#monthly-archive"
+          className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-4 py-2.5 text-[0.88rem] font-semibold text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-brand-soft)]"
         >
-          덕담 남기러 가기
-        </Link>
+          루다 성장 타임라인 보기
+        </a>
       </div>
-      <p className="mt-2 h-5 text-[0.76rem] font-medium text-[color:var(--color-brand-strong)]" aria-live="polite">
-        {ctaMessage ?? ""}
-      </p>
 
-      <div className="grid grid-cols-6 auto-rows-[68px] gap-2 sm:auto-rows-[84px]" data-hero-intro="gallery">
+      <div className="mt-3 grid grid-cols-6 auto-rows-[76px] gap-2 sm:auto-rows-[92px]" data-hero-intro="gallery">
         {featuredImages.map((image, index) => (
-          <motion.article
+          <article
             key={image.id}
-            className={`group relative overflow-hidden rounded-[0.95rem] bg-[#f3e2d8] text-left shadow-[0_8px_18px_rgba(85,39,54,0.1)] ${
+            data-hero-tile
+            className={`group relative overflow-hidden rounded-[0.95rem] bg-[#f3e2d8] text-left shadow-[0_10px_20px_rgba(85,39,54,0.12)] ${
               tileClasses[index] ?? "col-span-2 row-span-1"
             }`}
-            initial={reduceMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 14, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={buildSoftRevealTransition(reduceMotion, 0.1 + index * 0.05)}
           >
             <Image
               src={image.src}
               alt={image.alt}
               fill
-              priority={index < 2}
+              priority={index < 3}
               sizes={index === 0 ? "(max-width: 640px) 66vw, 420px" : "(max-width: 640px) 36vw, 260px"}
-              className="motion-safe-scale object-cover object-center brightness-[1.02]"
+              className="motion-safe-scale object-cover object-center"
             />
             {index < 2 ? (
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2.5 pb-2 pt-8 text-[0.76rem] font-semibold text-white/95">
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2 pt-8 text-[0.74rem] font-semibold text-white/95">
                 {image.caption}
               </span>
             ) : null}
-          </motion.article>
+          </article>
         ))}
       </div>
-    </motion.section>
+    </section>
   );
 }
