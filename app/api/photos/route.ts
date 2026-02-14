@@ -75,6 +75,7 @@ const applyDateFilter = (
   items: PhotoItem[],
   year?: number,
   month?: number,
+  day?: number,
 ) => {
   if (!year) {
     return items;
@@ -84,6 +85,10 @@ const applyDateFilter = (
     const date = new Date(item.takenAt);
     const itemYear = date.getUTCFullYear();
     const itemMonth = date.getUTCMonth() + 1;
+
+    if (month && day) {
+      return itemYear === year && itemMonth === month && date.getUTCDate() === day;
+    }
 
     if (month) {
       return itemYear === year && itemMonth === month;
@@ -98,17 +103,19 @@ const buildStaticResponse = ({
   limit,
   year,
   month,
+  day,
 }: {
   cursor?: string;
   limit: number;
   year?: number;
   month?: number;
+  day?: number;
 }): PhotoListResponse => {
   const allItems = galleryImages
     .map(mapGalleryImageToPhotoItem)
     .filter((item) => item.visibility === "family")
     .sort((left, right) => +new Date(right.takenAt) - +new Date(left.takenAt));
-  const filtered = applyDateFilter(allItems, year, month);
+  const filtered = applyDateFilter(allItems, year, month, day);
   const cursorTakenAt = parseCursorTakenAt(cursor);
 
   const cursorFiltered = cursorTakenAt
@@ -138,8 +145,9 @@ export async function GET(request: Request) {
   const limitParam = parseIntegerParam(searchParams.get("limit"));
   const yearParam = parseIntegerParam(searchParams.get("year"));
   const monthParam = parseIntegerParam(searchParams.get("month"));
+  const dayParam = parseIntegerParam(searchParams.get("day"));
 
-  if (limitParam === null || yearParam === null || monthParam === null) {
+  if (limitParam === null || yearParam === null || monthParam === null || dayParam === null) {
     return NextResponse.json(
       { error: "잘못된 쿼리 파라미터입니다." },
       { status: 400 },
@@ -149,6 +157,7 @@ export async function GET(request: Request) {
   const limit = clampLimit(limitParam);
   const year = yearParam;
   const month = monthParam;
+  const day = dayParam;
 
   if (month && (!year || month < 1 || month > 12)) {
     return NextResponse.json(
@@ -157,11 +166,18 @@ export async function GET(request: Request) {
     );
   }
 
+  if (day && (!year || !month || day < 1 || day > 31)) {
+    return NextResponse.json(
+      { error: "day 파라미터는 year, month와 함께 전달해야 합니다." },
+      { status: 400 },
+    );
+  }
+
   const cursor = searchParams.get("cursor") ?? undefined;
   const supabase = createServerSupabaseClient();
 
   if (!supabase) {
-    const fallback = buildStaticResponse({ cursor, limit, year, month });
+    const fallback = buildStaticResponse({ cursor, limit, year, month, day });
 
     return NextResponse.json(fallback, {
       headers: {
@@ -174,10 +190,11 @@ export async function GET(request: Request) {
     const response = await listPhotosPageFromDatabase(supabase, {
       cursor,
       limit,
-      year,
-      month,
-      visibility: "family",
-    });
+        year,
+        month,
+        day,
+        visibility: "family",
+      });
 
     return NextResponse.json(response, {
       headers: {
@@ -185,7 +202,7 @@ export async function GET(request: Request) {
       },
     });
   } catch {
-    const fallback = buildStaticResponse({ cursor, limit, year, month });
+    const fallback = buildStaticResponse({ cursor, limit, year, month, day });
 
     return NextResponse.json(fallback, {
       headers: {
