@@ -3,9 +3,9 @@
 import gsap from "gsap";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
+import { FixedBottomNav } from "@/components/fixed-bottom-nav";
 import {
   getInitialFeaturedImages,
   getShuffledFeaturedImages,
@@ -17,15 +17,7 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-const tabs = [
-  { href: "/photos", label: "사진" },
-  { href: "/guestbook", label: "덕담" },
-];
-
 export function AppShell({ children }: AppShellProps) {
-  const pathname = usePathname();
-  const safeBottomPadding = "max(0.95rem, env(safe-area-inset-bottom))";
-
   return (
     <div className="min-h-screen pb-[7.25rem]">
       <a
@@ -41,7 +33,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white px-3 py-2">
           <div className="min-w-0">
             <Link
-              href="/photos"
+              href="/"
               className="block truncate text-[length:var(--text-app-title)] font-bold tracking-[-0.02em] text-[color:var(--color-ink)]"
             >
               Luda Album
@@ -60,32 +52,7 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2 sm:px-5" style={{ paddingBottom: safeBottomPadding }}>
-        <div className="mx-auto grid w-full max-w-[780px] grid-cols-2 gap-1.5 rounded-[1.35rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-1.5 text-[0.94rem] shadow-[var(--shadow-soft)]">
-          {tabs.map((tab) => {
-            const isActive = pathname === tab.href;
-
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${isActive
-                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_8px_16px_rgba(26,115,232,0.25)]"
-                  : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)] active:bg-[color:var(--color-brand-soft)]/90"
-                  }`}
-              >
-                {tab.label}
-                {isActive ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-3 bottom-1.5 h-[2px] rounded-full bg-white/88"
-                  />
-                ) : null}
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+      <FixedBottomNav maxWidth={780} />
     </div>
   );
 }
@@ -246,15 +213,6 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       >
         루다의 오늘 사진
       </h1>
-
-      <div className="mt-3.5 flex flex-wrap items-center gap-2.5" data-hero-intro="actions">
-        <a
-          href="#gallery"
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.88rem] font-semibold text-white shadow-[0_8px_16px_rgba(26,115,232,0.22)] transition hover:bg-[color:var(--color-brand-strong)]"
-        >
-          이번 달 사진 보기
-        </a>
-      </div>
 
       <div className="mt-3 grid grid-cols-6 auto-rows-[76px] gap-2 sm:auto-rows-[92px]" data-hero-intro="gallery">
         {featuredImages.map((image, index) => (
