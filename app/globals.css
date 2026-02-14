@@ -1,27 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg: #f1f2f4;
-  --color-surface: #f8f8fa;
+  --color-bg: #fff9f5;
+  --color-surface: #fffdfb;
   --color-surface-strong: #ffffff;
-  --color-ink: #11151b;
-  --color-muted: #56606b;
-  --color-line: rgb(17 21 27 / 12%);
-  --color-brand: #cb5333;
-  --color-brand-soft: #fee9e1;
-  --color-accent: #be9150;
-  --shadow-card: 0 18px 38px rgb(17 21 27 / 12%);
-  --shadow-soft: 0 10px 24px rgb(17 21 27 / 8%);
-  --shadow-float: 0 22px 48px rgb(17 21 27 / 14%);
-  --radius-lg: 1.3rem;
+  --color-ink: #1f1720;
+  --color-muted: #6b5a63;
+  --color-line: #f0dde4;
+  --color-brand: #e96a8d;
+  --color-brand-soft: #ffe7ef;
+  --color-brand-strong: #cb4f74;
+  --color-success: #2f8d63;
+  --color-danger: #b63a55;
+  --shadow-card: 0 16px 34px rgb(147 72 96 / 16%);
+  --shadow-soft: 0 10px 24px rgb(147 72 96 / 11%);
+  --shadow-float: 0 26px 56px rgb(147 72 96 / 18%);
+  --radius-sm: 0.85rem;
+  --radius-md: 1.1rem;
+  --radius-lg: 1.45rem;
+  --radius-xl: 1.8rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.25rem;
   --space-6: 1.5rem;
-  --text-title: 1.3rem;
-  --text-body: 0.98rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --text-app-title: 1.08rem;
+  --text-hero-title: 1.5rem;
+  --text-section-title: 1.24rem;
+  --text-meta: 0.78rem;
+  --text-body: 1rem;
+  --tap-min: 44px;
+  --focus-ring: 0 0 0 3px rgb(233 106 141 / 30%);
 }
 
 .motion-safe-scale {
@@ -48,9 +60,9 @@ body {
   min-height: 100dvh;
   color: var(--color-ink);
   background:
-    radial-gradient(circle at 100% 0%, rgb(203 83 51 / 13%) 0%, transparent 38%),
-    radial-gradient(circle at 0% 25%, rgb(190 145 80 / 10%) 0%, transparent 32%),
-    linear-gradient(165deg, #f8f8fb 0%, #f1f2f4 52%, #eceef1 100%);
+    radial-gradient(circle at 100% 0%, rgb(233 106 141 / 13%) 0%, transparent 42%),
+    radial-gradient(circle at 0% 16%, rgb(255 189 203 / 20%) 0%, transparent 36%),
+    linear-gradient(165deg, #fffdfc 0%, #fff9f5 50%, #fff4f0 100%);
   font-family:
     var(--font-paperlogy),
     "Apple SD Gothic Neo",
@@ -67,11 +79,11 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(circle at 15% 15%, rgb(203 83 51 / 8%) 0%, transparent 34%),
+    radial-gradient(circle at 12% 14%, rgb(233 106 141 / 9%) 0%, transparent 34%),
     repeating-linear-gradient(
       125deg,
-      rgb(17 21 27 / 1.8%) 0,
-      rgb(17 21 27 / 1.8%) 1px,
+      rgb(107 90 99 / 1.5%) 0,
+      rgb(107 90 99 / 1.5%) 1px,
       transparent 1px,
       transparent 12px
     );
@@ -79,7 +91,7 @@ body::before {
 }
 
 ::selection {
-  background: rgb(178 76 50 / 22%);
+  background: rgb(233 106 141 / 24%);
   color: var(--color-ink);
 }
 
@@ -104,12 +116,13 @@ body::before {
 .page-base a,
 .page-base button {
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(178 76 50 / 20%);
+  -webkit-tap-highlight-color: rgb(233 106 141 / 18%);
+  min-height: var(--tap-min);
 }
 
 .page-base :focus-visible {
-  outline: 2px solid var(--color-brand);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 @keyframes fade-up {

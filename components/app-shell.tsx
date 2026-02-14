@@ -24,10 +24,10 @@ const tabs = [
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const safeBottomPadding = "max(1rem, env(safe-area-inset-bottom))";
+  const safeBottomPadding = "max(0.95rem, env(safe-area-inset-bottom))";
 
   return (
-    <div className="min-h-screen pb-[7.1rem]">
+    <div className="min-h-screen pb-[7.25rem]">
       <a
         href="#main-content"
         className="absolute left-3 top-3 z-50 -translate-y-24 rounded-full bg-[color:var(--color-brand)] px-3 py-2 text-sm font-semibold text-white transition focus-visible:translate-y-0"
@@ -35,25 +35,33 @@ export function AppShell({ children }: AppShellProps) {
         본문으로 건너뛰기
       </a>
       <header
-        className="sticky top-0 z-40 border-b border-[color:var(--color-line)]/45 bg-[color:var(--color-surface)]/84 px-3.5 pb-2.5 backdrop-blur-xl sm:px-5"
-        style={{ paddingTop: "max(0.7rem, env(safe-area-inset-top))" }}
+        className="sticky top-0 z-40 border-b border-[color:var(--color-line)] bg-[color:var(--color-surface)]/88 px-3.5 pb-2.5 backdrop-blur-xl sm:px-5"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-2.5 rounded-[1rem] border border-[color:var(--color-line)]/25 bg-white/68 px-2.5 py-1.5 shadow-[0_8px_20px_rgba(17,21,27,0.06)]">
-          <Link href="/photos" className="tracking-[-0.015em] text-[1.03rem] font-semibold text-[color:var(--color-ink)] sm:text-[1.09rem]">
-            Luda Album
-          </Link>
-          <div className="rounded-full border border-[color:var(--color-line)]/45 bg-[color:var(--color-brand-soft)]/75 px-2.5 py-1 text-[0.69rem] font-semibold tracking-[0.06em] text-[color:var(--color-brand)]">
-            MOBILE ALBUM
+        <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/85 px-3 py-2 shadow-[0_10px_24px_rgba(147,72,96,0.12)]">
+          <div className="min-w-0">
+            <Link
+              href="/photos"
+              className="block truncate text-[length:var(--text-app-title)] font-bold tracking-[-0.02em] text-[color:var(--color-ink)]"
+            >
+              Luda Album
+            </Link>
+            <p className="truncate text-[0.74rem] font-medium text-[color:var(--color-muted)]">
+              루다의 가족 추억 앨범
+            </p>
+          </div>
+          <div className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1 text-[0.68rem] font-semibold tracking-[0.05em] text-[color:var(--color-brand-strong)]">
+            FAMILY ONLY
           </div>
         </div>
       </header>
 
-      <main id="main-content" className="mx-auto w-full max-w-[780px] px-3.5 pt-3.5 sm:px-5 sm:pt-4.5">
+      <main id="main-content" className="mx-auto w-full max-w-[780px] px-3.5 pt-3.5 sm:px-5 sm:pt-4">
         {children}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2 sm:px-5" style={{ paddingBottom: safeBottomPadding }}>
-        <div className="mx-auto grid w-full max-w-[780px] grid-cols-2 gap-1.5 rounded-[1.25rem] border border-[color:var(--color-line)]/35 bg-[color:var(--color-surface-strong)]/90 p-1.5 text-[0.94rem] shadow-[var(--shadow-card)] backdrop-blur-xl">
+        <div className="mx-auto grid w-full max-w-[780px] grid-cols-2 gap-1.5 rounded-[1.35rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)]/92 p-1.5 text-[0.94rem] shadow-[var(--shadow-card)] backdrop-blur-xl">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href;
 
@@ -61,16 +69,16 @@ export function AppShell({ children }: AppShellProps) {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`relative min-h-11 rounded-[0.95rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${isActive
-                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_10px_22px_rgba(203,83,51,0.42)]"
-                  : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)]/70 active:bg-[color:var(--color-brand-soft)]/80"
+                className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${isActive
+                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_12px_24px_rgba(233,106,141,0.45)]"
+                  : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)] active:bg-[color:var(--color-brand-soft)]/90"
                   }`}
               >
                 {tab.label}
                 {isActive ? (
                   <span
                     aria-hidden="true"
-                    className="absolute left-1/2 top-1 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-white/85"
+                    className="absolute inset-x-3 bottom-1.5 h-[2px] rounded-full bg-white/88"
                   />
                 ) : null}
               </Link>
