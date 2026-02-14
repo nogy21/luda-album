@@ -17,6 +17,11 @@ const sortByTakenAtDesc = (a: GalleryImage, b: GalleryImage) => {
   return +new Date(b.takenAt) - +new Date(a.takenAt);
 };
 
+const formatDateLabel = (takenAt: string) => {
+  const date = new Date(takenAt);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+};
+
 export function GallerySection() {
   const sortedImages = useMemo(() => [...galleryImages].sort(sortByTakenAtDesc), []);
   const highlights = useMemo(() => sortedImages.slice(0, HIGHLIGHT_COUNT), [sortedImages]);
@@ -95,6 +100,7 @@ export function GallerySection() {
   }, [lightbox]);
 
   const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
+  const latestUpdatedLabel = monthGroups[0]?.updatedLabel ?? "업데이트 정보 없음";
 
   const openLightbox = (
     items: GalleryImage[],
@@ -188,7 +194,10 @@ export function GallerySection() {
           priority
         />
         <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5 text-white">
-          <p className="line-clamp-1 text-sm font-medium text-white/90">{selectedImage.caption}</p>
+          <div>
+            <p className="line-clamp-1 text-sm font-semibold text-white/95">{selectedImage.caption}</p>
+            <p className="text-[0.72rem] text-white/70">{formatDateLabel(selectedImage.takenAt)}</p>
+          </div>
           <div className="flex items-center gap-1.5">
             {lightbox && lightbox.items.length > 1 ? (
               <>
@@ -227,30 +236,35 @@ export function GallerySection() {
     <>
       <motion.section
         id="gallery"
-        className="scroll-mt-24 w-full rounded-[1.45rem] border border-[color:var(--color-line)]/40 bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+        className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
         initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.2 }}
         transition={buildSoftRevealTransition(reduceMotion, 0.08)}
       >
-        <div className="mb-4 flex items-end justify-between gap-2.5">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-[length:var(--text-title)] font-bold leading-tight text-[color:var(--color-ink)]">
+            <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
               사진 모아보기
             </h2>
-            <p className="mt-1 text-[0.92rem] text-[color:var(--color-muted)]">
-              주요 사진부터 월별 아카이브까지 빠르게 탐색
+            <p className="mt-1 text-[0.9rem] text-[color:var(--color-muted)]">
+              월별 기록과 대표 컷을 한 흐름으로 살펴보세요.
             </p>
           </div>
-          <p className="rounded-full border border-[color:var(--color-line)]/35 bg-[color:var(--color-brand-soft)]/55 px-2.5 py-1 text-[0.76rem] font-semibold text-[color:var(--color-brand)]">
-            총 {galleryImages.length}장
-          </p>
+          <div className="flex flex-wrap items-center gap-1.5 text-[0.74rem] font-semibold text-[color:var(--color-brand-strong)]">
+            <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1">
+              총 {galleryImages.length}장
+            </span>
+            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1">
+              {latestUpdatedLabel}
+            </span>
+          </div>
         </div>
 
-        <section className="mb-4 rounded-[1.15rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(17,21,27,0.04)]">
+        <section className="mb-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(147,72,96,0.08)]">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">하이라이트</h3>
-            <span className="text-[0.76rem] font-semibold text-[color:var(--color-muted)]">
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">최근 하이라이트</h3>
+            <span className="text-[0.74rem] font-semibold text-[color:var(--color-muted)]">
               최근 {highlights.length}장
             </span>
           </div>
@@ -260,7 +274,7 @@ export function GallerySection() {
                 key={image.id}
                 type="button"
                 onClick={(event) => openLightbox(highlights, index, event.currentTarget)}
-                className={`group relative overflow-hidden rounded-[0.9rem] bg-[#eadcca] text-left shadow-[0_7px_16px_rgba(45,27,19,0.08)] ${
+                className={`group relative overflow-hidden rounded-[0.92rem] bg-[#f3e2d8] text-left shadow-[0_7px_16px_rgba(85,39,54,0.1)] ${
                   index === 0 ? "col-span-2" : ""
                 }`}
                 aria-label={`${image.caption} 확대 보기`}
@@ -284,8 +298,8 @@ export function GallerySection() {
                   }`}
                   priority={index < 2}
                 />
-                {index === 0 ? (
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2.5 pt-8 text-[0.72rem] font-semibold text-white/95">
+                {index <= 1 ? (
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2.5 pb-2.5 pt-8 text-[0.74rem] font-semibold text-white/95">
                     {image.caption}
                   </span>
                 ) : null}
@@ -304,7 +318,7 @@ export function GallerySection() {
             return (
               <motion.article
                 key={group.key}
-                className="overflow-hidden rounded-[1.12rem] border border-[color:var(--color-line)]/30 bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(17,21,27,0.035)]"
+                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_8px_20px_rgba(147,72,96,0.08)]"
                 initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.12 }}
@@ -318,7 +332,14 @@ export function GallerySection() {
                 >
                   <div>
                     <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                    <p className="text-[0.75rem] text-[color:var(--color-muted)]">{group.items.length}장의 기록</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.72rem] font-medium text-[color:var(--color-muted)]">
+                      <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2 py-0.5">
+                        {group.items.length}장의 기록
+                      </span>
+                      <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2 py-0.5 text-[color:var(--color-brand-strong)]">
+                        {group.updatedLabel}
+                      </span>
+                    </div>
                   </div>
                   <span className="text-base font-semibold text-[color:var(--color-muted)]">
                     {open ? "−" : "+"}
@@ -326,14 +347,14 @@ export function GallerySection() {
                 </button>
 
                 {open ? (
-                  <div className="space-y-2.5 border-t border-[color:var(--color-line)]/22 p-3">
+                  <div className="space-y-2.5 border-t border-[color:var(--color-line)] p-3">
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                       {visibleItems.map((image, index) => (
                         <button
                           key={image.id}
                           type="button"
                           onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                          className="group relative overflow-hidden rounded-[0.86rem] bg-[#eadcca] text-left shadow-[0_7px_15px_rgba(45,27,19,0.08)]"
+                          className="group relative overflow-hidden rounded-[0.9rem] bg-[#f3e2d8] text-left shadow-[0_7px_15px_rgba(85,39,54,0.1)]"
                           aria-label={`${image.caption} 확대 보기`}
                         >
                           <Image
@@ -352,7 +373,7 @@ export function GallerySection() {
                       <button
                         type="button"
                         onClick={() => loadMore(group.key)}
-                        className="min-h-11 rounded-full border border-[color:var(--color-line)]/65 bg-[color:var(--color-surface)] px-3.5 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]/45"
+                        className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.82rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
                       >
                         더 불러오기
                       </button>

@@ -3,6 +3,8 @@ import type { GalleryImage } from "./images";
 export type GalleryMonthGroup = {
   key: string;
   label: string;
+  latestTakenAt: string;
+  updatedLabel: string;
   items: GalleryImage[];
 };
 
@@ -17,6 +19,11 @@ const getMonthLabel = (takenAt: string) => {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 };
 
+const getUpdatedLabel = (takenAt: string) => {
+  const date = new Date(takenAt);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 업데이트`;
+};
+
 export const groupGalleryImagesByMonth = (images: GalleryImage[]): GalleryMonthGroup[] => {
   const sorted = [...images].sort((a, b) => +new Date(b.takenAt) - +new Date(a.takenAt));
   const groups = new Map<string, GalleryMonthGroup>();
@@ -28,6 +35,8 @@ export const groupGalleryImagesByMonth = (images: GalleryImage[]): GalleryMonthG
       groups.set(key, {
         key,
         label: getMonthLabel(image.takenAt),
+        latestTakenAt: image.takenAt,
+        updatedLabel: getUpdatedLabel(image.takenAt),
         items: [],
       });
     }
