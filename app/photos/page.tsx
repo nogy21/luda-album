@@ -1,5 +1,6 @@
 import { AppShell, CoverCard } from "@/components/app-shell";
 import { GallerySection } from "@/components/gallery-section";
+import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
 import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
 import { galleryImages } from "@/lib/gallery/images";
 import {
@@ -8,8 +9,8 @@ import {
   mapGalleryImageToPhotoItem,
   mapPhotoItemToGalleryImage,
 } from "@/lib/gallery/repository";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { HighlightResponse, PhotoListResponse } from "@/lib/gallery/types";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +149,7 @@ export default async function PhotosPage({ searchParams }: { searchParams?: Prom
         initialHighlights={initialHighlights}
         initialFilter={{ year, month, day }}
       />
+      <NewPhotoBottomSheet latestPhotoTakenAt={initialData.items[0]?.takenAt ?? null} />
     </AppShell>
   );
 }

@@ -382,7 +382,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       const body = (await response.json()) as PhotoListResponse | { error?: string };
 
       if (!response.ok || !(body as PhotoListResponse).items) {
-        throw new Error((body as { error?: string }).error || "사진을 더 불러오지 못했어요.");
+        throw new Error((body as { error?: string }).error || "사진을 이어서 불러오지 못했어요.");
       }
 
       const page = body as PhotoListResponse;
@@ -392,7 +392,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       setNextCursor(page.nextCursor);
     } catch (error) {
       setLoadError(
-        error instanceof Error ? error.message : "사진을 불러오지 못했어요. 다시 시도해 주세요.",
+        error instanceof Error ? error.message : "사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
       setIsLoadingMore(false);
@@ -449,7 +449,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
     if (!nextCursor && !isLoadingMore) {
       setPendingJumpKey(null);
-      setLoadError("선택한 월의 사진을 찾을 수 없어요.");
+      setLoadError("선택한 월에는 아직 사진이 없어요.");
     }
   }, [isLoadingMore, loadMore, nextCursor, pendingJumpKey, reduceMotion]);
 
@@ -620,17 +620,17 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-4 shadow-[var(--shadow-soft)]"
       >
         <h2 className="text-[length:var(--text-section-title)] font-bold text-[color:var(--color-ink)]">
-          사진 모아보기
+          아직 공개된 사진이 없어요
         </h2>
-        <p className="mt-2 text-sm text-[color:var(--color-muted)]">아직 사진이 없어요</p>
+        <p className="mt-2 text-sm text-[color:var(--color-muted)]">첫 사진이 올라오면 여기에 바로 보여드릴게요.</p>
         <p className="mt-1 text-[0.84rem] text-[color:var(--color-muted)]">
-          첫 사진을 업로드하면 이 화면에 자동으로 반영돼요.
+          관리 페이지에서 업로드하면 앨범에 자동 반영됩니다.
         </p>
         <Link
           href="/admin"
           className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white"
         >
-          첫 사진 올리기
+          첫 사진 올리러 가기
         </Link>
       </section>
     );
@@ -796,8 +796,11 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       >
         <div className="mb-4">
           <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
-            사진 모아보기
+            루다의 새 순간
           </h2>
+          <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">
+            대표컷부터 월별 아카이브까지 한 번에 감상해요.
+          </p>
         </div>
 
         <section className="mb-4 space-y-2">
@@ -810,7 +813,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
                 }`}
             >
-              타임라인
+              월별 보기
             </button>
             <button
               type="button"
@@ -820,7 +823,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
                 }`}
             >
-              태그 앨범
+              태그 모아보기
             </button>
           </div>
 
@@ -834,7 +837,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     onClick={() => setActiveTag(null)}
                     className="rounded-full bg-[color:var(--color-brand-soft)] px-3 py-1 text-[0.72rem] font-semibold text-[color:var(--color-brand-strong)]"
                   >
-                    앨범 목록
+                    태그 목록
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
@@ -843,7 +846,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                       key={`tag-item-${item.id}`}
                       type="button"
                       onClick={(event) => openLightbox(activeTagItems, index, event.currentTarget)}
-                      className="group relative overflow-hidden rounded-[0.82rem] bg-[#eceff3] text-left"
+                      className="group relative overflow-hidden rounded-[0.82rem] bg-[color:var(--color-brand-soft)] text-left"
                       aria-label={`${item.caption} 확대 보기`}
                     >
                       <Image
@@ -867,7 +870,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     onClick={() => setActiveTag(album.tag)}
                     className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white text-left"
                   >
-                    <div className="relative bg-[#eceff3]">
+                    <div className="relative bg-[color:var(--color-brand-soft)]">
                       <Image
                         src={album.cover.thumbSrc ?? album.cover.src}
                         alt={`${album.tag} 태그 대표 사진`}
@@ -888,9 +891,9 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         </section>
 
         {viewMode === "timeline" ? (
-        <section ref={highlightsRef} className="mb-4 space-y-2">
+        <section id="gallery-highlights" ref={highlightsRef} className="mb-4 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">대표컷 · 하이라이트</h3>
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">이번 주 대표컷</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-1.5">
@@ -900,7 +903,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 data-highlight-card
                 type="button"
                 onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
-                className="group relative overflow-hidden rounded-[0.96rem] bg-[#eceff3] text-left shadow-[0_4px_12px_rgba(32,33,36,0.08)]"
+                className="group relative overflow-hidden rounded-[0.96rem] bg-[color:var(--color-brand-soft)] text-left shadow-[var(--shadow-soft)]"
                 aria-label={`${image.caption} 확대 보기`}
               >
                 <Image
@@ -928,7 +931,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                   data-highlight-card
                   type="button"
                   onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
-                  className="group relative overflow-hidden rounded-[0.9rem] bg-[#eceff3] text-left"
+                  className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left"
                   aria-label={`${image.caption} 확대 보기`}
                 >
                   <Image
@@ -993,12 +996,13 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
               <article
                 key={group.key}
                 id={`archive-${group.key}`}
-                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[0_4px_12px_rgba(32,33,36,0.08)]"
+                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] shadow-[var(--shadow-soft)]"
               >
                 <button
                   type="button"
                   onClick={() => toggleMonth(group.key)}
                   aria-expanded={isOpen}
+                  aria-label={`${group.label} ${isOpen ? "접기" : "펼치기"}`}
                   className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
                 >
                   <div>
@@ -1015,7 +1019,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                         key={image.id}
                         type="button"
                         onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.9rem] bg-[#eceff3] text-left shadow-[0_3px_10px_rgba(32,33,36,0.07)]"
+                        className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left shadow-[var(--shadow-soft)]"
                         aria-label={`${image.caption} 확대 보기`}
                       >
                         <Image
@@ -1039,13 +1043,19 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         <div ref={sentinelRef} className="mt-4 h-1 w-full" aria-hidden="true" />
 
         {isLoadingMore ? (
-          <p className="mt-3 rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]">
-            사진을 더 불러오는 중…
+          <p
+            className="mt-3 rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]"
+            aria-live="polite"
+          >
+            사진을 이어서 불러오는 중이에요…
           </p>
         ) : null}
 
         {loadError ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[0.84rem] text-rose-700">
+          <div
+            className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[0.84rem] text-rose-700"
+            role="alert"
+          >
             <span>{loadError}</span>
             <button
               type="button"
@@ -1063,9 +1073,9 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             onClick={() => void loadMore()}
             className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-4 text-sm font-semibold text-[color:var(--color-muted)]"
           >
-            더 불러오기
-          </button>
-        ) : null}
+              사진 더 보기
+            </button>
+          ) : null}
       </section>
 
       {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}

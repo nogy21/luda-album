@@ -2,6 +2,7 @@
 
 import gsap from "gsap";
 import Image from "next/image";
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { FixedBottomNav } from "@/components/fixed-bottom-nav";
@@ -25,7 +26,10 @@ export function AppShell({ children }: AppShellProps) {
       >
         본문으로 건너뛰기
       </a>
-      <main id="main-content" className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
+      <main
+        id="main-content"
+        className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.35rem,env(safe-area-inset-top))] sm:px-5 sm:pt-3"
+      >
         {children}
       </main>
 
@@ -164,39 +168,50 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
   return (
     <section
       ref={heroRef}
-      className="mb-6 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+      className="mb-4 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-card)] sm:p-4.5"
     >
-        <div className="mb-3.5 flex items-start justify-between gap-2.5">
-          <div data-hero-intro="meta">
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
-              Album Highlight
-            </p>
-            <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
-              최근 촬영 · {latestDateLabel}
-            </p>
-          </div>
-        <button
-          type="button"
-          onClick={handleShuffle}
-          className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-2 text-[0.78rem] font-semibold text-[color:var(--color-muted)] transition-colors hover:bg-[color:var(--color-brand-soft)]"
-        >
-          하이라이트 새로 섞기
-        </button>
+      <div className="mb-3.5" data-hero-intro="meta">
+        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
+          Luda Album
+        </p>
+        <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
+          마지막 업데이트 · {latestDateLabel}
+        </p>
       </div>
 
       <h1
         className="max-w-[20ch] text-[length:var(--text-hero-title)] font-bold leading-[1.24] tracking-[-0.02em] text-[color:var(--color-ink)]"
         data-hero-intro="title"
       >
-        루다의 오늘 사진
+        루다의 새 순간
       </h1>
+      <p className="mt-2 text-[0.88rem] leading-[1.5] text-[color:var(--color-muted)]" data-hero-intro="description">
+        오늘의 표정을 먼저 보고, 바로 월별 앨범으로 이어서 감상해요.
+      </p>
+
+      <div className="mt-3 flex items-center gap-2" data-hero-intro="cta">
+        <Link
+          href="#monthly-archive"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 text-[0.84rem] font-semibold text-white shadow-[0_8px_16px_rgb(233_106_141/28%)] transition-transform duration-200 hover:-translate-y-[1px]"
+        >
+          이번 달 사진 보기
+        </Link>
+        <button
+          type="button"
+          onClick={handleShuffle}
+          aria-label="대표 사진 다시 섞기"
+          className="inline-flex min-h-11 items-center rounded-full px-3 text-[0.8rem] font-semibold text-[color:var(--color-muted)] underline-offset-2 transition-colors hover:text-[color:var(--color-brand-strong)] hover:underline"
+        >
+          다른 순간 보기
+        </button>
+      </div>
 
       <div className="mt-3 grid grid-cols-6 auto-rows-[76px] gap-2 sm:auto-rows-[92px]" data-hero-intro="gallery">
         {featuredImages.map((image, index) => (
           <article
             key={image.id}
             data-hero-tile
-              className={`group relative overflow-hidden rounded-[0.95rem] bg-[#eceff3] text-left shadow-[0_4px_12px_rgba(32,33,36,0.08)] ${
+              className={`group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left shadow-[var(--shadow-soft)] ${
                 tileClasses[index] ?? "col-span-2 row-span-1"
               }`}
           >
@@ -216,6 +231,24 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
           </article>
         ))}
       </div>
+
+      <Link
+        href="#gallery-highlights"
+        className="mt-3 flex items-center justify-between rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-left"
+        data-hero-intro="next-preview"
+      >
+        <span>
+          <span className="block text-[0.72rem] font-semibold text-[color:var(--color-brand-strong)]">
+            다음 섹션
+          </span>
+          <span className="block text-[0.82rem] font-medium text-[color:var(--color-ink)]">
+            대표컷과 하이라이트 미리 보기
+          </span>
+        </span>
+        <span aria-hidden="true" className="text-base text-[color:var(--color-muted)]">
+          ↓
+        </span>
+      </Link>
     </section>
   );
 }
