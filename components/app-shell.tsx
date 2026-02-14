@@ -35,10 +35,10 @@ export function AppShell({ children }: AppShellProps) {
         본문으로 건너뛰기
       </a>
       <header
-        className="sticky top-0 z-40 border-b border-[color:var(--color-line)] bg-[color:var(--color-surface)]/88 px-3.5 pb-2.5 backdrop-blur-xl sm:px-5"
+        className="sticky top-0 z-40 border-b border-[color:var(--color-line)] bg-[color:var(--color-surface)]/96 px-3.5 pb-2.5 sm:px-5"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/85 px-3 py-2 shadow-[0_10px_24px_rgba(147,72,96,0.12)]">
+        <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white px-3 py-2">
           <div className="min-w-0">
             <Link
               href="/photos"
@@ -50,7 +50,7 @@ export function AppShell({ children }: AppShellProps) {
               루다의 가족 추억 앨범
             </p>
           </div>
-          <div className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-brand-soft)] px-2.5 py-1 text-[0.68rem] font-semibold tracking-[0.05em] text-[color:var(--color-brand-strong)]">
+          <div className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2.5 py-1 text-[0.68rem] font-semibold tracking-[0.03em] text-[color:var(--color-muted)]">
             FAMILY ONLY
           </div>
         </div>
@@ -61,7 +61,7 @@ export function AppShell({ children }: AppShellProps) {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2 sm:px-5" style={{ paddingBottom: safeBottomPadding }}>
-        <div className="mx-auto grid w-full max-w-[780px] grid-cols-2 gap-1.5 rounded-[1.35rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)]/92 p-1.5 text-[0.94rem] shadow-[var(--shadow-card)] backdrop-blur-xl">
+        <div className="mx-auto grid w-full max-w-[780px] grid-cols-2 gap-1.5 rounded-[1.35rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-1.5 text-[0.94rem] shadow-[var(--shadow-soft)]">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href;
 
@@ -70,7 +70,7 @@ export function AppShell({ children }: AppShellProps) {
                 key={tab.href}
                 href={tab.href}
                 className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${isActive
-                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_12px_24px_rgba(233,106,141,0.35)]"
+                  ? "bg-[color:var(--color-brand)] text-white shadow-[0_8px_16px_rgba(26,115,232,0.25)]"
                   : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)] active:bg-[color:var(--color-brand-soft)]/90"
                   }`}
               >
@@ -96,7 +96,6 @@ type CoverCardProps = {
 
 export function CoverCard({ images = galleryImages }: CoverCardProps) {
   const [featuredImages, setFeaturedImages] = useState(() => getInitialFeaturedImages(images, 8));
-  const [shuffleSeed, setShuffleSeed] = useState(0);
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -180,6 +179,10 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       return;
     }
 
+    if (featuredImages.length === 0) {
+      return;
+    }
+
     const hero = heroRef.current;
 
     if (!hero) {
@@ -208,17 +211,16 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
     return () => {
       tween.kill();
     };
-  }, [shuffleSeed, reduceMotion, featuredImages.length]);
+  }, [reduceMotion, featuredImages.length]);
 
   const handleShuffle = () => {
     setFeaturedImages(getShuffledFeaturedImages(images, 8));
-    setShuffleSeed((value) => value + 1);
   };
 
   return (
     <section
       ref={heroRef}
-      className="mb-4 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-float)] sm:p-4.5"
+      className="mb-6 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
     >
       <div className="mb-3.5 flex items-start justify-between gap-2.5">
         <div data-hero-intro="meta">
@@ -242,24 +244,15 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
         className="max-w-[20ch] text-[length:var(--text-hero-title)] font-bold leading-[1.24] tracking-[-0.02em] text-[color:var(--color-ink)]"
         data-hero-intro="title"
       >
-        루다의 오늘을 가장 빠르게 보는 앨범
+        루다의 오늘 사진
       </h1>
-      <p className="mt-2 text-[0.9rem] leading-[1.6] text-[color:var(--color-muted)]" data-hero-intro="copy">
-        첫 방문에서는 이번 달 대표컷부터, 다시 오면 성장 타임라인으로 바로 이어보세요.
-      </p>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-2.5" data-hero-intro="actions">
         <a
           href="#gallery"
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.88rem] font-semibold text-white shadow-[0_12px_24px_rgba(233,106,141,0.26)] transition hover:bg-[color:var(--color-brand-strong)]"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.88rem] font-semibold text-white shadow-[0_8px_16px_rgba(26,115,232,0.22)] transition hover:bg-[color:var(--color-brand-strong)]"
         >
           이번 달 사진 보기
-        </a>
-        <a
-          href="#monthly-archive"
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-4 py-2.5 text-[0.88rem] font-semibold text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-brand-soft)]"
-        >
-          루다 성장 타임라인 보기
         </a>
       </div>
 
@@ -268,9 +261,9 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
           <article
             key={image.id}
             data-hero-tile
-            className={`group relative overflow-hidden rounded-[0.95rem] bg-[#f3e2d8] text-left shadow-[0_10px_20px_rgba(85,39,54,0.12)] ${
-              tileClasses[index] ?? "col-span-2 row-span-1"
-            }`}
+              className={`group relative overflow-hidden rounded-[0.95rem] bg-[#eceff3] text-left shadow-[0_4px_12px_rgba(32,33,36,0.08)] ${
+                tileClasses[index] ?? "col-span-2 row-span-1"
+              }`}
           >
             <Image
               src={image.src}
