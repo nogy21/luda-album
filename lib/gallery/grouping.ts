@@ -1,48 +1,97 @@
+import { formatMonthMetaLabel, formatRelativeDaysFromNow } from "./time";
 import type { GalleryImage } from "./images";
 
 export type GalleryMonthGroup = {
   key: string;
   label: string;
+  year: number;
+  month: number;
   latestTakenAt: string;
+  latestUpdatedAt: string;
   updatedLabel: string;
+  metaLabel: string;
   items: GalleryImage[];
 };
 
-const getMonthKey = (takenAt: string) => {
+const getMonthData = (takenAt: string) => {
   const date = new Date(takenAt);
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  return `${date.getFullYear()}-${month}`;
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+
+  return {
+    key: `${year}-${String(month).padStart(2, "0")}`,
+    label: `${year}년 ${month}월`,
+    year,
+    month,
+  };
 };
 
-const getMonthLabel = (takenAt: string) => {
-  const date = new Date(takenAt);
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-};
-
-const getUpdatedLabel = (takenAt: string) => {
-  const date = new Date(takenAt);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 업데이트`;
+const sortByTakenAtDesc = (left: GalleryImage, right: GalleryImage) => {
+  return +new Date(right.takenAt) - +new Date(left.takenAt);
 };
 
 export const groupGalleryImagesByMonth = (images: GalleryImage[]): GalleryMonthGroup[] => {
-  const sorted = [...images].sort((a, b) => +new Date(b.takenAt) - +new Date(a.takenAt));
+  const sorted = [...images].sort(sortByTakenAtDesc);
   const groups = new Map<string, GalleryMonthGroup>();
 
   for (const image of sorted) {
-    const key = getMonthKey(image.takenAt);
+    const monthData = getMonthData(image.takenAt);
 
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label: getMonthLabel(image.takenAt),
+    if (!groups.has(monthData.key)) {
+      const updatedAt = image.updatedAt ?? image.takenAt;
+      groups.set(monthData.key, {
+        key: monthData.key,
+        label: monthData.label,
+        year: monthData.year,
+        month: monthData.month,
         latestTakenAt: image.takenAt,
-        updatedLabel: getUpdatedLabel(image.takenAt),
+        latestUpdatedAt: updatedAt,
+        updatedLabel:
+          formatRelativeDaysFromNow(updatedAt) === "오늘"
+            ? "최근 업데이트 오늘"
+            : `최근 업데이트 ${formatRelativeDaysFromNow(updatedAt)}`,
+        metaLabel: formatMonthMetaLabel(
+          monthData.year,
+          monthData.month,
+          1,
+          updatedAt,
+        ),
         items: [],
       });
     }
 
-    groups.get(key)?.items.push(image);
+    const group = groups.get(monthData.key);
+
+    if (!group) {
+      continue;
+    }
+
+    group.items.push(image);
+
+    if (+new Date(image.takenAt) > +new Date(group.latestTakenAt)) {
+      group.latestTakenAt = image.takenAt;
+    }
+
+    const imageUpdatedAt = image.updatedAt ?? image.takenAt;
+
+    if (+new Date(imageUpdatedAt) > +new Date(group.latestUpdatedAt)) {
+      group.latestUpdatedAt = imageUpdatedAt;
+    }
+
+    group.updatedLabel =
+      formatRelativeDaysFromNow(group.latestUpdatedAt) === "오늘"
+        ? "최근 업데이트 오늘"
+        : `최근 업데이트 ${formatRelativeDaysFromNow(group.latestUpdatedAt)}`;
+
+    group.metaLabel = formatMonthMetaLabel(
+      group.year,
+      group.month,
+      group.items.length,
+      group.latestUpdatedAt,
+    );
   }
 
-  return [...groups.values()];
+  return [...groups.values()].sort((left, right) => {
+    return +new Date(right.latestTakenAt) - +new Date(left.latestTakenAt);
+  });
 };
