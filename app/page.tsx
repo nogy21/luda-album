@@ -3,6 +3,8 @@ import { LandingGuestbookCta } from "@/components/landing-guestbook-cta";
 import { LandingHero } from "@/components/landing-hero";
 import { LandingMemorySection } from "@/components/landing-memory-section";
 import { LandingRecentSection } from "@/components/landing-recent-section";
+import { LudaDayBanner } from "@/components/luda-day-banner";
+import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
 import { galleryImages } from "@/lib/gallery/images";
 import {
   listPhotosPageFromDatabase,
@@ -33,11 +35,13 @@ export default async function Home() {
   }
 
   return (
-    <div className="min-h-screen pb-[7.25rem]">
+    <div className="min-h-screen pb-[14rem]">
+      <LudaDayBanner birthDateIso="2025-10-22T00:00:00.000Z" />
       <LandingHero items={items} />
-      <LandingRecentSection items={items} />
       <LandingMemorySection items={items} />
+      <LandingRecentSection items={items} />
       <LandingGuestbookCta />
+      <NewPhotoBottomSheet latestPhotoTakenAt={items[0]?.takenAt ?? null} />
       <FixedBottomNav maxWidth={860} />
     </div>
   );
