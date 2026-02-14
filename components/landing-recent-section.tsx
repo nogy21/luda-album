@@ -26,11 +26,11 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
         </div>
 
         <div className="grid grid-cols-3 gap-1.5">
-          {items.slice(0, 6).map((item) => (
+          {items.slice(0, 3).map((item) => (
             <Link
               key={item.id}
               href="/photos"
-              className="relative overflow-hidden rounded-[0.75rem] bg-[#eceff3]"
+              className="relative overflow-hidden rounded-[0.75rem] bg-[color:var(--color-surface)]"
               aria-label={`${item.caption} 보기`}
             >
               <Image

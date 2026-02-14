@@ -2,7 +2,6 @@
 
 import gsap from "gsap";
 import Image from "next/image";
-import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { FixedBottomNav } from "@/components/fixed-bottom-nav";
@@ -26,29 +25,7 @@ export function AppShell({ children }: AppShellProps) {
       >
         본문으로 건너뛰기
       </a>
-      <header
-        className="sticky top-0 z-40 border-b border-[color:var(--color-line)] bg-[color:var(--color-surface)]/96 px-3.5 pb-2.5 sm:px-5"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
-      >
-        <div className="mx-auto flex w-full max-w-[780px] items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white px-3 py-2">
-          <div className="min-w-0">
-            <Link
-              href="/"
-              className="block truncate text-[length:var(--text-app-title)] font-bold tracking-[-0.02em] text-[color:var(--color-ink)]"
-            >
-              Luda Album
-            </Link>
-            <p className="truncate text-[0.74rem] font-medium text-[color:var(--color-muted)]">
-              루다의 가족 추억 앨범
-            </p>
-          </div>
-          <div className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2.5 py-1 text-[0.68rem] font-semibold tracking-[0.03em] text-[color:var(--color-muted)]">
-            FAMILY ONLY
-          </div>
-        </div>
-      </header>
-
-      <main id="main-content" className="mx-auto w-full max-w-[780px] px-3.5 pt-3.5 sm:px-5 sm:pt-4">
+      <main id="main-content" className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
         {children}
       </main>
 
@@ -189,15 +166,15 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       ref={heroRef}
       className="mb-6 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
     >
-      <div className="mb-3.5 flex items-start justify-between gap-2.5">
-        <div data-hero-intro="meta">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
-            Family Memory
-          </p>
-          <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
-            총 {images.length}장 · {latestDateLabel}
-          </p>
-        </div>
+        <div className="mb-3.5 flex items-start justify-between gap-2.5">
+          <div data-hero-intro="meta">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
+              Album Highlight
+            </p>
+            <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
+              최근 촬영 · {latestDateLabel}
+            </p>
+          </div>
         <button
           type="button"
           onClick={handleShuffle}

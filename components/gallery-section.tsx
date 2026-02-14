@@ -11,8 +11,8 @@ import type {
   PhotoCommentRow,
 } from "@/lib/gallery/comment-types";
 import { MAX_PHOTO_COMMENT_LENGTH } from "@/lib/gallery/comment-validation";
-import { formatMonthMetaLabel } from "@/lib/gallery/time";
 import { getPhotoTags, groupPhotosByTag } from "@/lib/gallery/tags";
+import { formatMonthMetaLabel } from "@/lib/gallery/time";
 import type {
   HighlightResponse,
   PhotoItem,
@@ -613,10 +613,6 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     return monthStatMap.get(group.key) ?? null;
   };
 
-  const summaryCard = effectiveHighlights.featured[0] ?? items[0] ?? null;
-  const summaryCardItems =
-    effectiveHighlights.featured.length > 0 ? effectiveHighlights.featured : items;
-
   if (items.length === 0) {
     return (
       <section
@@ -798,43 +794,11 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         id="gallery"
         className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
       >
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
-              사진 모아보기
-            </h2>
-            <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">최근순 정렬</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[0.73rem] font-semibold">
-            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1 text-[color:var(--color-muted)]">
-              총 {summary.totalCount}장
-            </span>
-            <span className="rounded-full border border-[color:var(--color-line)] bg-white px-2.5 py-1 text-[color:var(--color-muted)]">
-              가족 전용
-            </span>
-          </div>
+        <div className="mb-4">
+          <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
+            사진 모아보기
+          </h2>
         </div>
-
-        {summaryCard ? (
-          <article className="mb-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3">
-            <p className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-brand-strong)]">
-              오늘의 추억
-            </p>
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-[0.96rem] font-semibold text-[color:var(--color-ink)]">{summaryCard.caption}</p>
-                <p className="text-[0.75rem] text-[color:var(--color-muted)]">{formatDateLabel(summaryCard.takenAt)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={(event) => openLightbox(summaryCardItems, 0, event.currentTarget)}
-                className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-3.5 text-[0.78rem] font-semibold text-[color:var(--color-muted)]"
-              >
-                크게 보기
-              </button>
-            </div>
-          </article>
-        ) : null}
 
         <section className="mb-4 space-y-2">
           <div className="flex items-center gap-1.5">
@@ -846,7 +810,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
                 }`}
             >
-              최신순
+              타임라인
             </button>
             <button
               type="button"
@@ -861,24 +825,18 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
           </div>
 
           {viewMode === "tags" ? (
-            <>
-              <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {tagAlbums.map((album) => (
+            activeTag ? (
+              <>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{activeTag}</p>
                   <button
-                    key={`tag-${album.tag}`}
                     type="button"
-                    onClick={() => setActiveTag(album.tag)}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold ${activeTag === album.tag
-                      ? "bg-[color:var(--color-brand)] text-white"
-                      : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
-                      }`}
+                    onClick={() => setActiveTag(null)}
+                    className="rounded-full bg-[color:var(--color-brand-soft)] px-3 py-1 text-[0.72rem] font-semibold text-[color:var(--color-brand-strong)]"
                   >
-                    #{album.tag} · {album.count}
+                    앨범 목록
                   </button>
-                ))}
-              </div>
-
-              {activeTag ? (
+                </div>
                 <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
                   {activeTagItems.map((item, index) => (
                     <button
@@ -899,34 +857,33 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     </button>
                   ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
-                  {tagAlbums.map((album) => (
-                    <button
-                      key={`album-${album.tag}`}
-                      type="button"
-                      onClick={() => setActiveTag(album.tag)}
-                      className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white text-left"
-                    >
-                      <div className="relative bg-[#eceff3]">
-                        <Image
-                          src={album.cover.thumbSrc ?? album.cover.src}
-                          alt={`${album.tag} 태그 대표 사진`}
-                          width={520}
-                          height={420}
-                          sizes="(max-width: 767px) 50vw, 280px"
-                          className="aspect-[4/3] w-full object-cover"
-                        />
-                      </div>
-                      <div className="px-2.5 py-2">
-                        <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{album.tag}</p>
-                        <p className="text-[0.7rem] text-[color:var(--color-muted)]">{album.count}장</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                {tagAlbums.map((album) => (
+                  <button
+                    key={`album-${album.tag}`}
+                    type="button"
+                    onClick={() => setActiveTag(album.tag)}
+                    className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white text-left"
+                  >
+                    <div className="relative bg-[#eceff3]">
+                      <Image
+                        src={album.cover.thumbSrc ?? album.cover.src}
+                        alt={`${album.tag} 태그 대표 사진`}
+                        width={520}
+                        height={420}
+                        sizes="(max-width: 767px) 50vw, 280px"
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                    </div>
+                    <div className="px-2.5 py-2">
+                      <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{album.tag}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
           ) : null}
         </section>
 
