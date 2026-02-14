@@ -3,9 +3,14 @@
 import gsap from "gsap";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import type {
+  CreatePhotoCommentPayload,
+  PhotoCommentRow,
+} from "@/lib/gallery/comment-types";
+import { MAX_PHOTO_COMMENT_LENGTH } from "@/lib/gallery/comment-validation";
 import { formatMonthMetaLabel } from "@/lib/gallery/time";
 import { getPhotoTags, groupPhotosByTag } from "@/lib/gallery/tags";
 import type {
@@ -42,6 +47,16 @@ type MonthGroup = {
   latestUpdatedAt: string;
   items: PhotoItem[];
 };
+
+type PhotoCommentsResponse = {
+  items: PhotoCommentRow[];
+};
+
+type PhotoCommentErrorResponse = {
+  error?: string;
+};
+
+type CommentAsyncStatus = "idle" | "loading" | "posting";
 
 const dedupeById = (items: PhotoItem[]) => {
   return Array.from(new Map(items.map((item) => [item.id, item])).values());
@@ -114,6 +129,13 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
   const [reduceMotion, setReduceMotion] = useState(false);
   const [viewMode, setViewMode] = useState<"timeline" | "tags">("timeline");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
+    {},
+  );
+  const [commentNickname, setCommentNickname] = useState("");
+  const [commentMessage, setCommentMessage] = useState("");
+  const [commentStatus, setCommentStatus] = useState<CommentAsyncStatus>("idle");
+  const [commentError, setCommentError] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -448,7 +470,112 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
   };
 
   const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
+  const selectedPhotoComments = selectedImage ? commentsByPhotoId[selectedImage.id] ?? [] : [];
+  const remainingCommentChars = MAX_PHOTO_COMMENT_LENGTH - commentMessage.length;
+  const commentDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [],
+  );
   const portalRoot = typeof document !== "undefined" ? document.body : null;
+
+  const loadPhotoComments = useCallback(async (photoId: string) => {
+    setCommentStatus("loading");
+    setCommentError(null);
+
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photoId)}/comments`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const body = (await response.json()) as PhotoCommentsResponse | PhotoCommentErrorResponse;
+
+      if (!response.ok || !(body as PhotoCommentsResponse).items) {
+        throw new Error((body as PhotoCommentErrorResponse).error || "댓글을 불러오지 못했어요.");
+      }
+
+      setCommentsByPhotoId((current) => ({
+        ...current,
+        [photoId]: (body as PhotoCommentsResponse).items,
+      }));
+    } catch (error) {
+      setCommentError(
+        error instanceof Error ? error.message : "댓글을 불러오지 못했어요.",
+      );
+    } finally {
+      setCommentStatus("idle");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedImage) {
+      return;
+    }
+
+    setCommentMessage("");
+    setCommentError(null);
+
+    if (selectedImage.id in commentsByPhotoId) {
+      return;
+    }
+
+    void loadPhotoComments(selectedImage.id);
+  }, [selectedImage, commentsByPhotoId, loadPhotoComments]);
+
+  const handleSubmitComment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedImage || commentStatus === "posting") {
+      return;
+    }
+
+    if (!commentMessage.trim()) {
+      setCommentError("댓글 내용을 입력해 주세요.");
+      return;
+    }
+
+    const payload: CreatePhotoCommentPayload = {
+      nickname: commentNickname,
+      message: commentMessage,
+    };
+
+    setCommentStatus("posting");
+    setCommentError(null);
+
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(selectedImage.id)}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json()) as PhotoCommentRow | PhotoCommentErrorResponse;
+
+      if (!response.ok || !(body as PhotoCommentRow).id) {
+        throw new Error((body as PhotoCommentErrorResponse).error || "댓글 등록에 실패했어요.");
+      }
+
+      const created = body as PhotoCommentRow;
+
+      setCommentsByPhotoId((current) => ({
+        ...current,
+        [selectedImage.id]: [created, ...(current[selectedImage.id] ?? [])],
+      }));
+      setCommentMessage("");
+    } catch (error) {
+      setCommentError(
+        error instanceof Error ? error.message : "댓글 등록에 실패했어요.",
+      );
+    } finally {
+      setCommentStatus("idle");
+    }
+  };
 
   const toggleMonth = (monthKey: string) => {
     setOpenMonthKeys((current) =>
@@ -595,6 +722,70 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             >
               닫기
             </button>
+          </div>
+        </div>
+        <div className="border-t border-white/10 bg-black/95 px-3 py-3 text-white">
+          <form className="space-y-2" onSubmit={handleSubmitComment}>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={commentNickname}
+                onChange={(event) => setCommentNickname(event.target.value)}
+                placeholder="닉네임"
+                className="min-h-11 w-[7rem] rounded-full border border-white/20 bg-white/10 px-3 text-[0.78rem] text-white placeholder:text-white/60"
+                maxLength={24}
+              />
+              <input
+                type="text"
+                value={commentMessage}
+                onChange={(event) => setCommentMessage(event.target.value)}
+                placeholder="이 사진에 댓글 남기기"
+                className="min-h-11 flex-1 rounded-full border border-white/20 bg-white/10 px-3 text-[0.82rem] text-white placeholder:text-white/60"
+                maxLength={MAX_PHOTO_COMMENT_LENGTH}
+              />
+              <button
+                type="submit"
+                disabled={commentStatus === "posting"}
+                className="min-h-11 rounded-full bg-white/20 px-3.5 text-[0.78rem] font-semibold text-white disabled:opacity-60"
+              >
+                {commentStatus === "posting" ? "등록 중…" : "댓글 등록"}
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-[0.68rem] text-white/70">
+              <span>{selectedPhotoComments.length}개 댓글</span>
+              <span>{remainingCommentChars}자 남음</span>
+            </div>
+          </form>
+
+          {commentError ? (
+            <p className="mt-1 rounded-[0.7rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
+              {commentError}
+            </p>
+          ) : null}
+
+          <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto pr-1">
+            {commentStatus === "loading" && selectedPhotoComments.length === 0 ? (
+              <p className="text-[0.74rem] text-white/70">댓글을 불러오는 중…</p>
+            ) : null}
+            {commentStatus !== "loading" && selectedPhotoComments.length === 0 ? (
+              <p className="text-[0.74rem] text-white/70">첫 댓글을 남겨주세요.</p>
+            ) : null}
+            {selectedPhotoComments.map((comment) => (
+              <article
+                key={comment.id}
+                className="rounded-[0.75rem] border border-white/12 bg-white/8 px-2.5 py-2"
+              >
+                <header className="flex items-center justify-between gap-2">
+                  <strong className="text-[0.74rem] font-semibold text-white/92">{comment.nickname}</strong>
+                  <time className="text-[0.66rem] text-white/60">
+                    {commentDateFormatter.format(new Date(comment.created_at))}
+                  </time>
+                </header>
+                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/90">
+                  {comment.message}
+                </p>
+              </article>
+            ))}
           </div>
         </div>
       </div>
