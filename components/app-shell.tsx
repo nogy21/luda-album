@@ -46,6 +46,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
   const [featuredImages, setFeaturedImages] = useState(() => getInitialFeaturedImages(images, 8));
   const reduceMotion =
     typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const heroRef = useRef<HTMLElement | null>(null);
   const latestDateLabel = useMemo(() => {
@@ -121,45 +122,6 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       context.revert();
     };
   }, [reduceMotion]);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      return;
-    }
-
-    if (featuredImages.length === 0) {
-      return;
-    }
-
-    const hero = heroRef.current;
-
-    if (!hero) {
-      return;
-    }
-
-    const tiles = hero.querySelectorAll<HTMLElement>("[data-hero-tile]");
-
-    if (tiles.length === 0) {
-      return;
-    }
-
-    const tween = gsap.fromTo(
-      tiles,
-      { opacity: 0, y: 10, scale: 0.985 },
-      {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        duration: 0.36,
-        ease: "power2.out",
-        stagger: 0.05,
-      },
-    );
-
-    return () => {
-      tween.kill();
-    };
-  }, [reduceMotion, featuredImages.length]);
 
   const handleShuffle = () => {
     setFeaturedImages(getShuffledFeaturedImages(images, 8));

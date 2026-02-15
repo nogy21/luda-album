@@ -50,7 +50,9 @@ export function LandingHero({ items }: LandingHeroProps) {
       return;
     }
 
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (reduceMotion || !shouldRunHeroIntro(window.sessionStorage, LANDING_INTRO_SESSION_KEY)) {
       return;

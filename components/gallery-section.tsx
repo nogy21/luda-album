@@ -1,6 +1,5 @@
 "use client";
 
-import gsap from "gsap";
 import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -139,9 +138,6 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const highlightsRef = useRef<HTMLElement | null>(null);
-  const lightboxPanelRef = useRef<HTMLDivElement | null>(null);
-  const lightboxImageRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setItems(initialData.items);
@@ -225,48 +221,6 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
   }, [activeTag, items]);
 
   useEffect(() => {
-    if (reduceMotion) {
-      return;
-    }
-
-    const highlightCount =
-      effectiveHighlights.featured.length + effectiveHighlights.highlights.length;
-
-    if (highlightCount === 0) {
-      return;
-    }
-
-    const section = highlightsRef.current;
-
-    if (!section) {
-      return;
-    }
-
-    const cards = section.querySelectorAll<HTMLElement>("[data-highlight-card]");
-
-    if (cards.length === 0) {
-      return;
-    }
-
-    const tween = gsap.fromTo(
-      cards,
-      { opacity: 0, y: 10, scale: 0.986 },
-      {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        duration: 0.34,
-        ease: "power2.out",
-        stagger: 0.05,
-      },
-    );
-
-    return () => {
-      tween.kill();
-    };
-  }, [reduceMotion, effectiveHighlights]);
-
-  useEffect(() => {
     if (!lightbox) {
       return;
     }
@@ -325,29 +279,6 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [lightbox]);
-
-  useEffect(() => {
-    if (reduceMotion || !lightbox) {
-      return;
-    }
-
-    const panel = lightboxPanelRef.current;
-    const imageWrap = lightboxImageRef.current;
-
-    if (!panel || !imageWrap) {
-      return;
-    }
-
-    const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
-
-    timeline
-      .fromTo(panel, { opacity: 0, y: 12, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.26 })
-      .fromTo(imageWrap, { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 0.22 }, "<0.03");
-
-    return () => {
-      timeline.kill();
-    };
-  }, [lightbox, lightbox?.index, reduceMotion]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || isLoadingMore) {
@@ -646,10 +577,9 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       }}
     >
       <div
-        ref={lightboxPanelRef}
-        className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
+        className="enter-fade-up w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
       >
-        <div ref={lightboxImageRef}>
+        <div>
           <Image
             src={selectedImage.src}
             alt={selectedImage.alt}
@@ -880,7 +810,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         </section>
 
         {viewMode === "timeline" ? (
-        <section id="gallery-highlights" ref={highlightsRef} className="mb-5 space-y-2.5">
+        <section id="gallery-highlights" className="mb-5 space-y-2.5">
           <div className="flex items-center justify-between">
             <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">이번 주 대표컷</h3>
           </div>
