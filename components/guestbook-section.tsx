@@ -70,11 +70,11 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
     : fetchError || statusMessage;
 
   const statusTone = {
-    idle: "border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-muted)]",
+    idle: "bg-white/72 text-[color:var(--color-muted)]",
     posting:
-      "border-[color:var(--color-brand)]/30 bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    error: "border-rose-200 bg-rose-50 text-rose-700",
+      "bg-[color:var(--color-brand-soft)]/84 text-[color:var(--color-brand-strong)]",
+    success: "bg-emerald-50/86 text-emerald-700",
+    error: "bg-rose-50/88 text-rose-700",
   }[submitStatus];
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -151,7 +151,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
       </header>
 
       <form
-        className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[var(--shadow-soft)]"
+        className="space-y-3 rounded-[var(--radius-md)] bg-[color:color-mix(in_srgb,var(--color-surface)_84%,#fff_16%)] p-3.5 shadow-[0_4px_12px_rgb(85_48_62/8%)]"
         onSubmit={handleSubmit}
       >
         <div>
@@ -170,7 +170,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             autoComplete="name"
             spellCheck={false}
             placeholder={DEFAULT_GUESTBOOK_NICKNAME}
-            className="ui-input w-full px-3 py-2.5 text-[0.95rem] placeholder:text-[color:var(--color-muted)]/75"
+            className="ui-input w-full bg-white/92 px-3 py-2.5 text-[0.95rem] placeholder:text-[color:var(--color-muted)]/75"
           />
         </div>
 
@@ -195,7 +195,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             required
             maxLength={MAX_GUESTBOOK_MESSAGE_LENGTH}
             rows={4}
-            className="ui-input w-full px-3 py-3 text-[0.95rem] leading-relaxed"
+            className="ui-input w-full bg-white/92 px-3 py-3 text-[0.95rem] leading-relaxed"
             placeholder="새해 복 많이 받아, 건강하게 자라자…"
           />
           <p className="mt-1.5 text-right text-[0.74rem] font-semibold text-[color:var(--color-muted)]">
@@ -212,7 +212,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             {submitStatus === "posting" ? "등록 중…" : "덕담 등록"}
           </button>
           <p
-            className={`min-h-11 flex-1 rounded-[0.95rem] border px-3 py-2 text-[0.82rem] font-medium ${statusTone}`}
+            className={`min-h-11 flex-1 rounded-[0.95rem] px-3 py-2 text-[0.82rem] font-medium ${statusTone}`}
             role={submitStatus === "error" ? "alert" : "status"}
           >
             {statusMessage}
@@ -221,20 +221,20 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
       </form>
 
       {fetchError ? (
-        <p className="mt-3 rounded-[0.95rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[0.86rem] font-medium text-rose-700" role="alert">
+        <p className="mt-3 rounded-[0.95rem] bg-rose-50/90 px-3 py-2 text-[0.86rem] font-medium text-rose-700" role="alert">
           {fetchError}
         </p>
       ) : null}
 
       <div className="mt-5 space-y-2.5" aria-live="polite">
         {isLoading ? (
-          <p className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.9rem] text-[color:var(--color-muted)]">
+          <p className="rounded-[var(--radius-md)] bg-white/72 px-3.5 py-3 text-[0.9rem] text-[color:var(--color-muted)]">
             덕담을 불러오는 중…
           </p>
         ) : null}
 
         {!isLoading && messages.length === 0 ? (
-          <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.9rem] text-[color:var(--color-muted)]">
+          <p className="rounded-[var(--radius-md)] bg-white/72 px-3.5 py-3 text-[0.9rem] text-[color:var(--color-muted)]">
             첫 번째 덕담을 남겨 주세요.
           </p>
         ) : null}
@@ -242,7 +242,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
         {messages.map((entry) => (
           <article
             key={entry.id}
-            className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 shadow-[var(--shadow-soft)]"
+            className="rounded-[var(--radius-md)] bg-white/86 px-3.5 py-3 shadow-[0_4px_12px_rgb(85_48_62/7%)]"
           >
             <header className="mb-1.5 flex items-center justify-between gap-2 text-xs">
               <strong className="text-[0.98rem] text-[color:var(--color-ink)]">{entry.nickname}</strong>

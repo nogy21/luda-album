@@ -200,7 +200,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
           type="button"
           onClick={handleShuffle}
           aria-label="대표 사진 다시 섞기"
-          className="ui-btn-text text-[0.8rem]"
+          className="ui-btn ui-btn-secondary px-3.5 text-[0.8rem]"
         >
           다른 순간 보기
         </button>
@@ -211,7 +211,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
           <article
             key={image.id}
             data-hero-tile
-              className={`group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left shadow-[var(--shadow-soft)] ${
+              className={`group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left ${
                 tileClasses[index] ?? "col-span-2 row-span-1"
               }`}
           >
@@ -234,7 +234,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
 
       <Link
         href="#gallery-highlights"
-        className="mt-3 flex items-center justify-between rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-left shadow-[var(--shadow-soft)]"
+        className="mt-3 flex items-center justify-between rounded-[0.95rem] bg-[color:color-mix(in_srgb,var(--color-surface)_88%,#fff_12%)] px-3 py-2.5 text-left shadow-[0_5px_14px_rgb(85_48_62/8%)]"
         data-hero-intro="next-preview"
       >
         <span>

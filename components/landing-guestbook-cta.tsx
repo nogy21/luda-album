@@ -17,7 +17,7 @@ export function LandingGuestbookCta() {
 
   return (
     <section className="pointer-events-none fixed inset-x-0 z-30 px-4 sm:px-6" style={{ bottom: "calc(max(0.95rem, env(safe-area-inset-bottom)) + 5.6rem)" }}>
-      <div className="pointer-events-auto mx-auto w-full max-w-[860px] rounded-[1.1rem] border border-[color:var(--color-line)] bg-white/94 px-3.5 py-3 shadow-[var(--shadow-soft)] backdrop-blur">
+      <div className="pointer-events-auto mx-auto w-full max-w-[860px] rounded-[1.1rem] bg-white/88 px-3.5 py-3 shadow-[0_10px_28px_rgb(85_48_62/15%)] backdrop-blur">
         <p className="mb-2 text-[0.84rem] font-semibold text-[color:var(--color-ink)]">루다에게 한 마디</p>
         <div className="flex items-center gap-2">
           <input

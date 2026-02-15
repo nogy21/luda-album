@@ -31,7 +31,7 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
       aria-label="하단 메뉴"
     >
       <div
-        className="mx-auto grid grid-cols-3 gap-1.5 rounded-[1.3rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-1.5 text-[0.92rem] shadow-[var(--shadow-soft)]"
+        className="mx-auto grid grid-cols-3 gap-1.5 rounded-[1.3rem] bg-white/84 p-1.5 text-[0.92rem] shadow-[0_16px_34px_rgb(85_48_62/18%)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/70"
         style={{ maxWidth }}
       >
         {tabs.map((tab) => {
@@ -41,9 +41,9 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-all ${active
-                ? "bg-[color:var(--color-brand)] text-white shadow-[0_4px_10px_rgb(233_106_141/20%)]"
-                : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)]"
+              className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${active
+                ? "bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                : "text-[color:var(--color-muted)] hover:bg-white/70 hover:text-[color:var(--color-ink)]"
                 }`}
               aria-current={active ? "page" : undefined}
             >
@@ -51,7 +51,7 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
               {active ? (
                 <span
                   aria-hidden="true"
-                  className="absolute inset-x-4 bottom-1 h-[2.5px] rounded-full bg-white/95"
+                  className="absolute bottom-1.5 h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand)]"
                 />
               ) : null}
             </Link>
