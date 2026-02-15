@@ -34,7 +34,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="min-h-screen" style={{ paddingBottom: "var(--landing-bottom-safe-space)" }}>
+    <div className="page-bottom-safe page-bottom-safe--guestbook-cta min-h-screen">
       <LudaDayBanner birthDateIso="2025-10-22T00:00:00.000Z" />
       <LandingHero items={items} />
       <LandingRecentSection items={items} />

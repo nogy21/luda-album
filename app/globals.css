@@ -50,10 +50,22 @@
   --focus-ring: 0 0 0 3px rgb(227 104 141 / 24%);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-nav-height: 4.8rem;
-  --bottom-nav-offset: calc(max(0.62rem, var(--safe-area-bottom)) + var(--bottom-nav-height));
-  --bottom-nav-safe-space: calc(var(--bottom-nav-offset) + 0.9rem);
-  --floating-cta-height: 6.35rem;
-  --landing-bottom-safe-space: calc(var(--bottom-nav-safe-space) + var(--floating-cta-height) + 0.7rem);
+  --bottom-nav-edge-offset: max(0.62rem, var(--safe-area-bottom));
+  --bottom-occupied-nav: calc(var(--bottom-nav-edge-offset) + var(--bottom-nav-height));
+  --floating-guestbook-cta-height: 6.35rem;
+  --floating-guestbook-cta-gap: 0.62rem;
+  --bottom-occupied-nav-with-guestbook-cta: calc(
+    var(--bottom-occupied-nav) + var(--floating-guestbook-cta-gap) + var(--floating-guestbook-cta-height)
+  );
+  --floating-guestbook-cta-bottom: calc(var(--bottom-occupied-nav) + var(--floating-guestbook-cta-gap));
+  --page-bottom-occupied-height: var(--bottom-occupied-nav);
+  --page-bottom-buffer-nav-only: 0.9rem;
+  --page-bottom-buffer-nav-with-guestbook-cta: 0.98rem;
+  --page-bottom-content-buffer: var(--page-bottom-buffer-nav-only);
+  --page-bottom-content-padding: calc(var(--page-bottom-occupied-height) + var(--page-bottom-content-buffer));
+  --z-bottom-cta: 35;
+  --z-bottom-nav: 40;
+  --z-overlay: 80;
 }
 
 .ui-surface {
@@ -288,6 +300,15 @@ body {
 .page-base input,
 .page-base textarea {
   font: inherit;
+}
+
+.page-bottom-safe {
+  padding-bottom: var(--page-bottom-content-padding);
+}
+
+.page-bottom-safe--guestbook-cta {
+  --page-bottom-occupied-height: var(--bottom-occupied-nav-with-guestbook-cta);
+  --page-bottom-content-buffer: var(--page-bottom-buffer-nav-with-guestbook-cta);
 }
 
 .page-base a,

@@ -17,8 +17,8 @@ export function LandingGuestbookCta() {
 
   return (
     <section
-      className="pointer-events-none fixed inset-x-0 z-[35] px-4 sm:px-6"
-      style={{ bottom: "calc(var(--bottom-nav-offset) + 0.62rem)" }}
+      className="pointer-events-none fixed inset-x-0 z-[var(--z-bottom-cta)] px-4 sm:px-6"
+      style={{ bottom: "var(--floating-guestbook-cta-bottom)" }}
     >
       <div className="pointer-events-auto mx-auto w-full max-w-[860px] rounded-[1rem] border border-[color:color-mix(in_srgb,var(--color-line)_72%,#fff_28%)] bg-white/86 px-3.5 py-3 shadow-[0_8px_22px_rgb(28_18_24/12%)] backdrop-blur">
         <p className="mb-2 text-[0.8rem] font-semibold text-[color:var(--color-ink)]">루다에게 따뜻한 한 줄</p>

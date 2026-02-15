@@ -26,8 +26,8 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-1.5 sm:px-5"
-      style={{ paddingBottom: "max(0.62rem, var(--safe-area-bottom))" }}
+      className="fixed inset-x-0 bottom-0 z-[var(--z-bottom-nav)] px-3.5 pt-1.5 sm:px-5"
+      style={{ paddingBottom: "var(--bottom-nav-edge-offset)" }}
       aria-label="하단 메뉴"
     >
       <div

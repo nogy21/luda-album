@@ -635,7 +635,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
   const lightboxOverlay = selectedImage ? (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/88 p-3 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/88 p-3 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="갤러리 이미지 크게 보기"

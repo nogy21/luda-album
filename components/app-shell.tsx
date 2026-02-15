@@ -19,7 +19,7 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-nav-safe-space)" }}>
+    <div className="page-bottom-safe min-h-screen">
       <a
         href="#main-content"
         className="ui-btn ui-btn-secondary absolute left-3 top-3 z-[90] -translate-y-24 px-3 text-sm focus-visible:translate-y-0"

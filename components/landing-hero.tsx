@@ -166,7 +166,7 @@ export function LandingHero({ items }: LandingHeroProps) {
 
       {expanded ? (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/86 p-3"
+          className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/86 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="루다 하이라이트 이미지"

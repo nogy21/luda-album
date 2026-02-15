@@ -9,6 +9,7 @@ import {
   isNewPhotoNoticeEligible,
   toLocalDateKey,
 } from "@/lib/ui/new-photo-notice";
+import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 type NewPhotoBottomSheetProps = {
   latestPhotoTakenAt?: string | null;
@@ -62,6 +63,18 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
     };
   }, [latestPhotoTakenAt]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const snapshot = lockPageScroll();
+
+    return () => {
+      unlockPageScroll(snapshot);
+    };
+  }, [open]);
+
   if (!open || !latestPhotoTakenAt) {
     return null;
   }
@@ -82,7 +95,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end bg-black/45 p-4 backdrop-blur-[2px] sm:p-6"
+      className="fixed inset-0 z-[var(--z-overlay)] flex items-end bg-black/45 p-4 backdrop-blur-[2px] sm:p-6"
       style={{ paddingBottom: "max(1rem, calc(var(--safe-area-bottom) + 0.7rem))" }}
     >
       <section
