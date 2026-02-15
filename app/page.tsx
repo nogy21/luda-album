@@ -1,7 +1,6 @@
 import { FixedBottomNav } from "@/components/fixed-bottom-nav";
 import { LandingGuestbookCta } from "@/components/landing-guestbook-cta";
 import { LandingHero } from "@/components/landing-hero";
-import { LandingMemorySection } from "@/components/landing-memory-section";
 import { LandingRecentSection } from "@/components/landing-recent-section";
 import { LudaDayBanner } from "@/components/luda-day-banner";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
@@ -38,7 +37,6 @@ export default async function Home() {
     <div className="min-h-screen pb-[14rem]">
       <LudaDayBanner birthDateIso="2025-10-22T00:00:00.000Z" />
       <LandingHero items={items} />
-      <LandingMemorySection items={items} />
       <LandingRecentSection items={items} />
       <LandingGuestbookCta />
       <NewPhotoBottomSheet latestPhotoTakenAt={items[0]?.takenAt ?? null} />
