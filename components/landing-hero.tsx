@@ -106,13 +106,13 @@ export function LandingHero({ items }: LandingHeroProps) {
   }
 
   return (
-    <section ref={rootRef} className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
-      <article className="ui-surface overflow-hidden rounded-[var(--radius-xl)] p-3.5 sm:p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-brand-strong)]" data-landing-intro="meta">
+    <section ref={rootRef} className="mx-auto mt-[var(--space-section-sm)] w-full max-w-[860px] px-4 sm:px-6">
+      <article className="ui-surface overflow-hidden rounded-[var(--radius-xl)] p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="ui-eyebrow" data-landing-intro="meta">
             Luda Highlight
           </p>
-          <p className="text-[0.72rem] font-medium text-[color:var(--color-muted)]" data-landing-intro="date">
+          <p className="text-[var(--text-meta)] font-medium text-[color:var(--color-muted)]" data-landing-intro="date">
             {formatDateLabel(primaryImage.takenAt)}
             {place ? ` · ${place}` : ""}
           </p>
@@ -120,7 +120,7 @@ export function LandingHero({ items }: LandingHeroProps) {
 
         <h1
           data-landing-intro="title"
-          className="text-[clamp(1.34rem,4.9vw,1.82rem)] font-bold leading-[1.22] tracking-[-0.02em] text-[color:var(--color-ink)]"
+          className="text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
         >
           루다 하이라이트
         </h1>
@@ -128,7 +128,7 @@ export function LandingHero({ items }: LandingHeroProps) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-3 block w-full overflow-hidden rounded-[0.95rem] bg-[color:var(--color-surface)] text-left"
+          className="mt-4 block w-full overflow-hidden rounded-[0.95rem] bg-[color:var(--color-surface)] text-left"
           data-landing-intro="image"
           aria-label="루다 하이라이트 확대 보기"
         >
@@ -142,7 +142,7 @@ export function LandingHero({ items }: LandingHeroProps) {
               sizes="(max-width: 860px) 92vw, 760px"
               className="aspect-[5/4] w-full object-cover"
             />
-            <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-2.5 pb-2 pt-8 text-[0.75rem] font-semibold text-white/95">
+            <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-2.5 pb-2 pt-8 text-[0.72rem] font-semibold text-white/96">
               {primaryImage.caption}
             </p>
           </div>
@@ -171,10 +171,10 @@ export function LandingHero({ items }: LandingHeroProps) {
               className="max-h-[78vh] w-full object-contain"
               priority
             />
-            <div className="space-y-2 border-t border-white/10 bg-black/90 px-3 py-3">
+            <div className="space-y-2.5 border-t border-white/10 bg-black/90 px-3 py-3">
               <div>
-                <p className="text-[0.9rem] font-semibold text-white/96">{primaryImage.caption}</p>
-                <p className="text-[0.74rem] text-white/74">
+                <p className="text-[0.88rem] font-semibold text-white/96">{primaryImage.caption}</p>
+                <p className="text-[0.73rem] text-white/74">
                   {formatDateLabel(primaryImage.takenAt)}
                   {place ? ` · ${place}` : ""}
                 </p>
@@ -182,14 +182,14 @@ export function LandingHero({ items }: LandingHeroProps) {
               <div className="flex flex-wrap items-center gap-2">
                 <Link
                   href={buildDayLink(primaryImage.takenAt)}
-                  className="ui-btn ui-btn-primary px-4 text-[0.84rem]"
+                  className="ui-btn ui-btn-primary px-4"
                 >
                   해당 날짜 앨범으로 이동
                 </Link>
                 <button
                   type="button"
                   onClick={() => setExpanded(false)}
-                  className="ui-btn rounded-full border border-white/25 bg-white/12 px-4 text-[0.82rem] text-white"
+                  className="ui-btn border-white/26 bg-white/10 px-4 text-white hover:bg-white/16"
                 >
                   닫기
                 </button>

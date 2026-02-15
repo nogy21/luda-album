@@ -303,14 +303,16 @@ export function AdminConsole() {
 
   if (!authenticated) {
     return (
-      <section className="ui-surface mx-auto w-full max-w-xl space-y-4 rounded-[var(--radius-lg)] p-4 sm:p-6">
-        <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">관리자 업로드</h1>
-        <p className="text-sm text-[color:var(--color-muted)]">
+      <section className="ui-surface mx-auto w-full max-w-xl space-y-5 rounded-[var(--radius-lg)] p-5 sm:p-6">
+        <h1 className="text-[1.42rem] font-bold tracking-[-0.016em] text-[color:var(--color-ink)]">
+          관리자 업로드
+        </h1>
+        <p className="text-[0.92rem] leading-[1.6] text-[color:var(--color-muted)]">
           사진 업로드는 관리자 계정으로만 가능합니다.
         </p>
 
         <form
-          className="space-y-3"
+          className="ui-subtle-surface space-y-4 rounded-[var(--radius-md)] p-4"
           onSubmit={async (event) => {
             event.preventDefault();
             setAuthLoading(true);
@@ -345,7 +347,10 @@ export function AdminConsole() {
           }}
         >
           <div className="space-y-2">
-            <label htmlFor="admin-password" className="text-base font-semibold text-[color:var(--color-ink)]">
+            <label
+              htmlFor="admin-password"
+              className="text-[0.86rem] font-semibold text-[color:var(--color-muted)]"
+            >
               관리자 비밀번호
             </label>
             <input
@@ -353,7 +358,7 @@ export function AdminConsole() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="ui-input min-h-11 w-full px-3 text-base"
+              className="ui-input min-h-11 w-full px-3 text-[0.95rem]"
               required
             />
           </div>
@@ -361,13 +366,13 @@ export function AdminConsole() {
           <button
             type="submit"
             disabled={authLoading}
-            className="ui-btn ui-btn-primary px-5 text-base disabled:opacity-60"
+            className="ui-btn ui-btn-primary px-5"
           >
             {authLoading ? "인증 중…" : "로그인"}
           </button>
         </form>
 
-        <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3 text-sm text-[color:var(--color-muted)]">
+        <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3 text-[0.85rem] text-[color:var(--color-muted)]">
           {statusText}
         </output>
       </section>
@@ -375,11 +380,13 @@ export function AdminConsole() {
   }
 
   return (
-    <section className="ui-surface mx-auto w-full max-w-3xl space-y-4 rounded-[var(--radius-lg)] p-4 sm:p-6">
+    <section className="ui-surface mx-auto w-full max-w-3xl space-y-5 rounded-[var(--radius-lg)] p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">관리자 업로드</h1>
-          <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+          <h1 className="text-[1.4rem] font-bold tracking-[-0.016em] text-[color:var(--color-ink)]">
+            관리자 업로드
+          </h1>
+          <p className="mt-1 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
             파일별 진행률과 부분 실패를 확인하고 재시도할 수 있어요.
           </p>
         </div>
@@ -391,7 +398,7 @@ export function AdminConsole() {
             setQueue([]);
             setStatusText("로그아웃되었습니다.");
           }}
-          className="ui-btn ui-btn-secondary px-4 text-sm"
+          className="ui-btn ui-btn-secondary px-4"
         >
           로그아웃
         </button>
@@ -401,11 +408,17 @@ export function AdminConsole() {
         {statusText}
       </output>
 
-      <section className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[var(--shadow-soft)]">
+      <section className="ui-subtle-surface space-y-4 rounded-[var(--radius-md)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-[color:var(--color-ink)]">업로드 범위</p>
+          <p className="text-[0.88rem] font-semibold text-[color:var(--color-ink)]">업로드 범위</p>
           <div className="flex items-center gap-2">
-            <label className="ui-btn-secondary inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+            <label
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-[0.76rem] font-semibold ${
+                uploadVisibility === "family"
+                  ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                  : "border-[color:var(--color-line)] bg-white/90 text-[color:var(--color-muted)]"
+              }`}
+            >
               <input
                 type="radio"
                 name="visibility"
@@ -415,7 +428,13 @@ export function AdminConsole() {
               />
               가족 전용
             </label>
-            <label className="ui-btn-secondary inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+            <label
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-[0.76rem] font-semibold ${
+                uploadVisibility === "admin"
+                  ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                  : "border-[color:var(--color-line)] bg-white/90 text-[color:var(--color-muted)]"
+              }`}
+            >
               <input
                 type="radio"
                 name="visibility"
@@ -436,7 +455,7 @@ export function AdminConsole() {
             accept="image/*"
             multiple
             onChange={(event) => handleQueueFiles(event.target.files)}
-            className="ui-input min-h-11 flex-1 p-2 text-sm text-[color:var(--color-muted)]"
+            className="ui-input min-h-11 flex-1 p-2 text-[0.86rem] text-[color:var(--color-muted)]"
           />
           <button
             type="button"
@@ -447,14 +466,14 @@ export function AdminConsole() {
               setQueue([]);
               setStatusText("업로드 대기열을 비웠어요.");
             }}
-            className="ui-btn ui-btn-secondary px-3.5 text-sm"
+            className="ui-btn ui-btn-secondary px-3.5"
           >
             초기화
           </button>
         </div>
 
         <div className="space-y-2 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[0.82rem] font-semibold text-[color:var(--color-muted)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[0.8rem] font-semibold text-[color:var(--color-muted)]">
             <span>전체 진행률</span>
             <span>{Math.round(summary.totalProgress * 100)}%</span>
           </div>
@@ -464,7 +483,7 @@ export function AdminConsole() {
               style={{ width: `${Math.round(summary.totalProgress * 100)}%` }}
             />
           </div>
-          <p className="text-[0.78rem] text-[color:var(--color-muted)]">
+          <p className="text-[0.76rem] leading-[1.45] text-[color:var(--color-muted)]">
             성공 {summary.successCount}개 · 실패 {summary.failureCount}개 · 업로드 중{" "}
             {summary.uploadingCount}개
           </p>
@@ -475,7 +494,7 @@ export function AdminConsole() {
             type="button"
             onClick={() => void runUpload(queuedItems)}
             disabled={isUploading || queuedItems.length === 0}
-            className="ui-btn ui-btn-primary px-4 text-sm disabled:opacity-60"
+            className="ui-btn ui-btn-primary px-4 disabled:opacity-60"
           >
             {isUploading ? "업로드 중…" : `대기 파일 업로드 (${queuedItems.length})`}
           </button>
@@ -483,14 +502,14 @@ export function AdminConsole() {
             type="button"
             onClick={() => void handleRetryFailed()}
             disabled={isUploading || failedItems.length === 0}
-            className="ui-btn ui-btn-secondary px-4 text-sm disabled:opacity-60"
+            className="ui-btn ui-btn-secondary px-4 disabled:opacity-60"
           >
             실패 항목 재시도 ({failedItems.length})
           </button>
         </div>
       </section>
 
-      <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-muted)]">
+      <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]">
         {statusText}
       </output>
 
@@ -499,15 +518,15 @@ export function AdminConsole() {
           {queue.map((item) => (
             <li
               key={item.id}
-              className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white p-3"
+              className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white p-3.5"
             >
-              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[color:var(--color-ink)]">{item.file.name}</p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[0.9rem] font-semibold text-[color:var(--color-ink)]">{item.file.name}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
+                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] font-semibold text-[color:var(--color-muted)]">
                     {item.visibility === "admin" ? "관리자 전용" : "가족 전용"}
                   </span>
-                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
+                  <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] font-semibold text-[color:var(--color-muted)]">
                     {item.status}
                   </span>
                 </div>
@@ -518,24 +537,23 @@ export function AdminConsole() {
                   style={{ width: `${Math.round(item.progress * 100)}%` }}
                 />
               </div>
-              <p className="mt-1 text-[0.76rem] text-[color:var(--color-muted)]">
+              <p className="mt-1 text-[0.74rem] text-[color:var(--color-muted)]">
                 {Math.round(item.progress * 100)}% · {(item.file.size / (1024 * 1024)).toFixed(2)}MB
               </p>
               {item.uploadedPath ? (
-                <p className="mt-1 text-[0.76rem] text-emerald-700">{item.uploadedPath}</p>
+                <p className="mt-1 text-[0.74rem] text-emerald-700">{item.uploadedPath}</p>
               ) : null}
               {item.errorReason ? (
-                <p className="mt-1 text-[0.76rem] text-rose-700">{item.errorReason}</p>
+                <p className="mt-1 text-[0.74rem] text-rose-700">{item.errorReason}</p>
               ) : null}
               {item.uploadedPhotoId ? (
                 <button
                   type="button"
                   onClick={() => void handleToggleFeatured(item)}
                   disabled={isUploading || togglingPhotoId === item.uploadedPhotoId}
-                  className={`mt-2 inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-xs font-semibold ${item.isFeatured
-                    ? "border border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
-                    : "border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-muted)]"
-                    } disabled:opacity-60`}
+                  className={`ui-btn mt-2 px-3.5 text-[0.76rem] ${
+                    item.isFeatured ? "ui-btn-primary" : "ui-btn-secondary"
+                  } disabled:opacity-60`}
                 >
                   {togglingPhotoId === item.uploadedPhotoId
                     ? "저장 중…"
@@ -548,7 +566,7 @@ export function AdminConsole() {
           ))}
         </ul>
       ) : (
-        <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-sm text-[color:var(--color-muted)]">
+        <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.88rem] text-[color:var(--color-muted)]">
           아직 업로드 대기 파일이 없어요.
         </p>
       )}

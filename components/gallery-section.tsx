@@ -617,19 +617,16 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     return (
       <section
         id="gallery"
-        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4"
+        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4 sm:p-5"
       >
-        <h2 className="text-[length:var(--text-section-title)] font-bold text-[color:var(--color-ink)]">
-          아직 공개된 사진이 없어요
-        </h2>
-        <p className="mt-2 text-sm text-[color:var(--color-muted)]">첫 사진이 올라오면 여기에 바로 보여드릴게요.</p>
-        <p className="mt-1 text-[0.84rem] text-[color:var(--color-muted)]">
+        <h2 className="ui-title">아직 공개된 사진이 없어요</h2>
+        <p className="mt-2 text-[0.9rem] text-[color:var(--color-muted)]">
+          첫 사진이 올라오면 여기에 바로 보여드릴게요.
+        </p>
+        <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">
           관리 페이지에서 업로드하면 앨범에 자동 반영됩니다.
         </p>
-        <Link
-          href="/admin"
-          className="ui-btn ui-btn-primary mt-4 px-4 py-2 text-sm"
-        >
+        <Link href="/admin" className="ui-btn ui-btn-primary mt-4 px-4">
           첫 사진 올리러 가기
         </Link>
       </section>
@@ -792,36 +789,28 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     <>
       <section
         id="gallery"
-        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-3.5 sm:p-4.5"
+        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4 sm:p-5"
       >
-        <div className="mb-4">
-          <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
-            루다의 새 순간
-          </h2>
-          <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">
+        <div className="mb-5">
+          <h2 className="ui-title">루다의 새 순간</h2>
+          <p className="mt-1.5 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
             대표컷부터 월별 아카이브까지 한 번에 감상해요.
           </p>
         </div>
 
-        <section className="mb-4 space-y-2">
-          <div className="flex items-center gap-1.5">
+        <section className="mb-5 space-y-2.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setViewMode("timeline")}
-              className={`ui-btn px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "timeline"
-                ? "ui-btn-primary"
-                : "ui-btn-secondary"
-                }`}
+              className={`ui-btn px-3.5 ${viewMode === "timeline" ? "ui-btn-primary" : "ui-btn-secondary"}`}
             >
               월별 보기
             </button>
             <button
               type="button"
               onClick={() => setViewMode("tags")}
-              className={`ui-btn px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "tags"
-                ? "ui-btn-primary"
-                : "ui-btn-secondary"
-                }`}
+              className={`ui-btn px-3.5 ${viewMode === "tags" ? "ui-btn-primary" : "ui-btn-secondary"}`}
             >
               태그 모아보기
             </button>
@@ -831,11 +820,11 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             activeTag ? (
               <>
                 <div className="mb-1 flex items-center justify-between">
-                  <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{activeTag}</p>
+                  <p className="text-[0.86rem] font-semibold text-[color:var(--color-ink)]">#{activeTag}</p>
                   <button
                     type="button"
                     onClick={() => setActiveTag(null)}
-                    className="ui-btn ui-btn-secondary px-3 py-1 text-[0.72rem]"
+                    className="ui-btn ui-btn-secondary px-3"
                   >
                     태그 목록
                   </button>
@@ -868,7 +857,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     key={`album-${album.tag}`}
                     type="button"
                     onClick={() => setActiveTag(album.tag)}
-                    className="overflow-hidden rounded-[0.9rem] bg-white/88 text-left shadow-[0_5px_14px_rgb(85_48_62/9%)]"
+                    className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/88 text-left"
                   >
                     <div className="relative bg-[color:var(--color-brand-soft)]">
                       <Image
@@ -891,19 +880,19 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         </section>
 
         {viewMode === "timeline" ? (
-        <section id="gallery-highlights" ref={highlightsRef} className="mb-4 space-y-2">
+        <section id="gallery-highlights" ref={highlightsRef} className="mb-5 space-y-2.5">
           <div className="flex items-center justify-between">
             <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">이번 주 대표컷</h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
             {effectiveHighlights.featured.map((image, index) => (
               <button
                 key={`featured-${image.id}`}
                 data-highlight-card
                 type="button"
                 onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
-                className="group relative overflow-hidden rounded-[0.96rem] bg-[color:var(--color-brand-soft)] text-left shadow-[0_6px_14px_rgb(85_48_62/9%)]"
+                className="group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left"
                 aria-label={`${image.caption} 확대 보기`}
               >
                 <Image
@@ -916,7 +905,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                   priority
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/52 to-transparent px-2.5 pb-2.5 pt-9">
-                  <p className="text-[0.78rem] font-semibold text-white/95">{image.caption}</p>
+                  <p className="text-[0.76rem] font-semibold text-white/95">{image.caption}</p>
                   <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
                 </div>
               </button>
@@ -924,7 +913,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
           </div>
 
           {effectiveHighlights.highlights.length > 0 ? (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
               {effectiveHighlights.highlights.map((image, index) => (
                 <button
                   key={`highlight-${image.id}`}
@@ -950,17 +939,16 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         ) : null}
 
         {viewMode === "timeline" ? (
-        <section id="monthly-archive" className="space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <section id="monthly-archive" className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {years.map((year) => (
               <button
                 key={`year-${year}`}
                 type="button"
                 onClick={() => openYear(year)}
-                className={`ui-btn px-3 py-1.5 text-[0.74rem] font-semibold transition-colors ${selectedYear === year
-                  ? "ui-btn-primary"
-                  : "ui-btn-secondary"
-                  }`}
+                className={`ui-btn px-3.5 transition-colors ${
+                  selectedYear === year ? "ui-btn-primary" : "ui-btn-secondary"
+                }`}
               >
                 {year}년
               </button>
@@ -973,7 +961,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 key={`${group.key}-jump`}
                 type="button"
                 onClick={() => jumpToMonth(group.key)}
-                className="ui-btn ui-btn-secondary shrink-0 px-3 py-1.5 text-[0.72rem]"
+                className="ui-btn ui-btn-secondary shrink-0 px-3"
               >
                 {group.month}월
               </button>
@@ -996,7 +984,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
               <article
                 key={group.key}
                 id={`archive-${group.key}`}
-                className="overflow-hidden rounded-[var(--radius-md)] bg-white/88 shadow-[0_6px_16px_rgb(85_48_62/9%)]"
+                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86"
               >
                 <button
                   type="button"
@@ -1006,8 +994,8 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                   className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
                 >
                   <div>
-                    <p className="text-[0.98rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                    <p className="mt-1 text-[0.72rem] font-medium text-[color:var(--color-muted)]">{metaLabel}</p>
+                    <p className="text-[0.95rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
+                    <p className="mt-1 text-[0.71rem] font-medium text-[color:var(--color-muted)]">{metaLabel}</p>
                   </div>
                   <span className="text-base font-semibold text-[color:var(--color-muted)]">{isOpen ? "−" : "+"}</span>
                 </button>
@@ -1019,7 +1007,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                         key={image.id}
                         type="button"
                         onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left shadow-[0_5px_12px_rgb(85_48_62/8%)]"
+                        className="group relative overflow-hidden rounded-[0.88rem] bg-[color:var(--color-brand-soft)] text-left"
                         aria-label={`${image.caption} 확대 보기`}
                       >
                         <Image
@@ -1044,7 +1032,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
         {isLoadingMore ? (
           <p
-            className="mt-3 rounded-[0.95rem] bg-white/75 px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]"
+            className="mt-3 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white/75 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]"
             aria-live="polite"
           >
             사진을 이어서 불러오는 중이에요…
@@ -1053,14 +1041,14 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
         {loadError ? (
           <div
-            className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] bg-rose-50/88 px-3 py-2 text-[0.84rem] text-rose-700"
+            className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-rose-200/80 bg-rose-50/88 px-3 py-2 text-[0.82rem] text-rose-700"
             role="alert"
           >
             <span>{loadError}</span>
               <button
                 type="button"
                 onClick={() => void loadMore()}
-                className="ui-btn ui-btn-secondary px-3 text-[0.78rem] font-semibold"
+                className="ui-btn ui-btn-secondary px-3"
               >
                 다시 시도
               </button>
@@ -1071,7 +1059,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
           <button
             type="button"
             onClick={() => void loadMore()}
-            className="ui-btn ui-btn-secondary mt-3 px-4 text-sm"
+            className="ui-btn ui-btn-secondary mt-3 px-4"
           >
               사진 더 보기
             </button>

@@ -19,16 +19,16 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen pb-[7.25rem]">
+    <div className="min-h-screen pb-[6.5rem]">
       <a
         href="#main-content"
-        className="ui-btn ui-btn-primary absolute left-3 top-3 z-50 -translate-y-24 px-3 text-sm focus-visible:translate-y-0"
+        className="ui-btn ui-btn-secondary absolute left-3 top-3 z-50 -translate-y-24 px-3 text-sm focus-visible:translate-y-0"
       >
         본문으로 건너뛰기
       </a>
       <main
         id="main-content"
-        className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.35rem,env(safe-area-inset-top))] sm:px-5 sm:pt-3"
+        className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.4rem,env(safe-area-inset-top))] sm:px-5 sm:pt-3"
       >
         {children}
       </main>
@@ -166,54 +166,52 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
   };
 
   return (
-      <section
-        ref={heroRef}
-        className="ui-surface mb-4 overflow-hidden rounded-[var(--radius-xl)] p-3.5 sm:p-4.5"
-      >
-      <div className="mb-3.5" data-hero-intro="meta">
-        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
-          Luda Album
-        </p>
-        <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">
+    <section
+      ref={heroRef}
+      className="ui-surface mb-[var(--space-section-md)] overflow-hidden rounded-[var(--radius-xl)] p-4 sm:p-5"
+    >
+      <div className="mb-4 ui-stack-sm" data-hero-intro="meta">
+        <p className="ui-eyebrow">Luda Album</p>
+        <p className="text-[var(--text-meta)] font-medium text-[color:var(--color-muted)]">
           마지막 업데이트 · {latestDateLabel}
         </p>
       </div>
 
       <h1
-        className="max-w-[20ch] text-[length:var(--text-hero-title)] font-bold leading-[1.24] tracking-[-0.02em] text-[color:var(--color-ink)]"
+        className="max-w-[18ch] text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
         data-hero-intro="title"
       >
         루다의 새 순간
       </h1>
-      <p className="mt-2 text-[0.88rem] leading-[1.5] text-[color:var(--color-muted)]" data-hero-intro="description">
+      <p
+        className="mt-2 max-w-[30ch] text-[var(--text-body)] leading-[var(--leading-body)] text-[color:var(--color-muted)]"
+        data-hero-intro="description"
+      >
         오늘의 표정을 먼저 보고, 바로 월별 앨범으로 이어서 감상해요.
       </p>
 
-      <div className="mt-3 flex items-center gap-2" data-hero-intro="cta">
-        <Link
-          href="#monthly-archive"
-          className="ui-btn ui-btn-primary px-4 text-[0.84rem]"
-        >
+      <div className="mt-4 flex flex-wrap items-center gap-2.5" data-hero-intro="cta">
+        <Link href="#monthly-archive" className="ui-btn ui-btn-primary px-4">
           이번 달 사진 보기
         </Link>
         <button
           type="button"
           onClick={handleShuffle}
           aria-label="대표 사진 다시 섞기"
-          className="ui-btn ui-btn-secondary px-3.5 text-[0.8rem]"
+          className="ui-btn ui-btn-secondary px-4"
         >
           다른 순간 보기
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-6 auto-rows-[76px] gap-2 sm:auto-rows-[92px]" data-hero-intro="gallery">
+      <div className="mt-4 grid grid-cols-6 auto-rows-[74px] gap-1.5 sm:auto-rows-[88px]" data-hero-intro="gallery">
         {featuredImages.map((image, index) => (
           <article
             key={image.id}
             data-hero-tile
-              className={`group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left ${
-                tileClasses[index] ?? "col-span-2 row-span-1"
-              }`}
+            className={`group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left ${
+              tileClasses[index] ?? "col-span-2 row-span-1"
+            }`}
           >
             <Image
               src={image.src}
@@ -224,7 +222,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
               className="motion-safe-scale object-cover object-center"
             />
             {index < 2 ? (
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2 pt-8 text-[0.74rem] font-semibold text-white/95">
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2 pt-8 text-[0.72rem] font-semibold text-white/95">
                 {image.caption}
               </span>
             ) : null}
@@ -234,14 +232,14 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
 
       <Link
         href="#gallery-highlights"
-        className="mt-3 flex items-center justify-between rounded-[0.95rem] bg-[color:color-mix(in_srgb,var(--color-surface)_88%,#fff_12%)] px-3 py-2.5 text-left shadow-[0_5px_14px_rgb(85_48_62/8%)]"
+        className="ui-subtle-surface mt-4 flex items-center justify-between rounded-[0.95rem] px-3 py-2.5 text-left"
         data-hero-intro="next-preview"
       >
         <span>
-          <span className="block text-[0.72rem] font-semibold text-[color:var(--color-brand-strong)]">
+          <span className="block text-[0.7rem] font-semibold text-[color:var(--color-brand-strong)]">
             다음 섹션
           </span>
-          <span className="block text-[0.82rem] font-medium text-[color:var(--color-ink)]">
+          <span className="block text-[0.84rem] font-medium text-[color:var(--color-ink)]">
             대표컷과 하이라이트 미리 보기
           </span>
         </span>

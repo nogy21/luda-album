@@ -21,11 +21,13 @@ export function LandingMemorySection({ items }: LandingMemorySectionProps) {
   }
 
   return (
-    <section className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
-      <div className="rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)]">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-[1.05rem] font-semibold text-[color:var(--color-ink)]">추억 회상</h2>
-          <span className="text-[0.76rem] font-medium text-[color:var(--color-muted)]">{memory.label}</span>
+    <section className="mx-auto mt-[var(--space-section-md)] w-full max-w-[860px] px-4 sm:px-6">
+      <div className="ui-surface rounded-[var(--radius-lg)] p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="ui-title">추억 회상</h2>
+          <span className="text-[var(--text-meta)] font-medium text-[color:var(--color-muted)]">
+            {memory.label}
+          </span>
         </div>
 
         <Link
@@ -34,7 +36,10 @@ export function LandingMemorySection({ items }: LandingMemorySectionProps) {
           aria-label={`${memory.label} 사진 보기`}
         >
           {memory.items.map((item) => (
-            <div key={item.id} className="relative overflow-hidden rounded-[0.8rem] bg-[#eceff3]">
+            <div
+              key={item.id}
+              className="relative overflow-hidden rounded-[0.8rem] bg-[color:var(--color-surface)]"
+            >
               <Image
                 src={item.thumbSrc ?? item.src}
                 alt={item.alt}

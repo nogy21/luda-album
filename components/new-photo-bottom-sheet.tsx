@@ -83,20 +83,22 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/45 p-4 backdrop-blur-[2px] sm:p-6">
       <section
-        className="mx-auto w-full max-w-[860px] overflow-hidden rounded-[1.4rem] border border-[color:var(--color-line)] bg-[color:var(--color-ink)] text-white shadow-[0_22px_48px_rgba(0,0,0,0.45)]"
+        className="mx-auto w-full max-w-[860px] overflow-hidden rounded-[1.26rem] border border-white/14 bg-[color:var(--color-ink)] text-white shadow-[0_20px_44px_rgba(0,0,0,0.42)]"
         role="dialog"
         aria-modal="true"
         aria-label="새 사진 알림"
       >
         <div className="bg-[linear-gradient(135deg,var(--color-brand),var(--color-brand-strong))] px-5 py-5">
-          <h2 className="text-[1.2rem] font-semibold tracking-[-0.01em]">루다의 새 사진이 올라왔어요</h2>
-          <p className="mt-1 text-[0.95rem] text-white/88">지금 바로 확인해볼까요?</p>
+          <h2 className="text-[1.13rem] font-semibold leading-[1.3] tracking-[-0.01em]">
+            루다의 새 사진이 올라왔어요
+          </h2>
+          <p className="mt-1 text-[0.9rem] text-white/88">지금 바로 확인해볼까요?</p>
         </div>
         <div className="space-y-3 px-4 pb-4 pt-3">
           <button
             type="button"
             onClick={handleGo}
-            className="ui-btn ui-btn-primary min-h-12 w-full rounded-[1rem] px-4 text-[0.92rem]"
+            className="ui-btn ui-btn-primary min-h-12 w-full rounded-[1rem] px-4 text-[0.9rem]"
           >
             보러 가기
           </button>
@@ -105,7 +107,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
             onClick={() => {
               handleLater();
             }}
-            className="ui-btn w-full rounded-[0.8rem] border border-white/22 bg-white/12 py-2 text-center text-[0.88rem] font-medium text-white/78"
+            className="ui-btn w-full rounded-[0.8rem] border border-white/26 bg-white/10 py-2 text-center text-white/86 hover:bg-white/16"
           >
             나중에
           </button>
