@@ -14,12 +14,12 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
   return (
     <section className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
-      <div className="rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)]">
+      <div className="ui-surface rounded-[var(--radius-lg)] p-4">
         <div className="mb-2.5 flex items-center justify-between gap-2">
-          <h2 className="text-[1.05rem] font-semibold text-[color:var(--color-ink)]">요즘 루다는...</h2>
+          <h2 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">요즘 루다는...</h2>
           <Link
             href="/photos"
-            className="text-[0.8rem] font-semibold text-[color:var(--color-brand-strong)]"
+            className="text-[0.78rem] font-semibold text-[color:var(--color-brand-strong)]"
           >
             더 보기
           </Link>

@@ -96,7 +96,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
           <button
             type="button"
             onClick={handleGo}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-[1rem] bg-[color:var(--color-brand)] px-4 text-[0.95rem] font-semibold text-white transition-transform duration-200 hover:-translate-y-[1px]"
+            className="ui-btn ui-btn-primary min-h-12 w-full rounded-[1rem] px-4 text-[0.92rem]"
           >
             보러 가기
           </button>
@@ -105,7 +105,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
             onClick={() => {
               handleLater();
             }}
-            className="block min-h-11 w-full rounded-[0.8rem] py-2 text-center text-[0.94rem] font-medium text-white/72"
+            className="ui-btn w-full rounded-[0.8rem] border border-white/22 bg-white/12 py-2 text-center text-[0.88rem] font-medium text-white/78"
           >
             나중에
           </button>

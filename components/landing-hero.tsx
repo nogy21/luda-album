@@ -107,7 +107,7 @@ export function LandingHero({ items }: LandingHeroProps) {
 
   return (
     <section ref={rootRef} className="mx-auto mt-3 w-full max-w-[860px] px-4 sm:px-6">
-      <article className="overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4">
+      <article className="ui-surface overflow-hidden rounded-[var(--radius-xl)] p-3.5 sm:p-4">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-brand-strong)]" data-landing-intro="meta">
             Luda Highlight
@@ -120,7 +120,7 @@ export function LandingHero({ items }: LandingHeroProps) {
 
         <h1
           data-landing-intro="title"
-          className="text-[clamp(1.4rem,5.1vw,1.9rem)] font-bold leading-[1.2] tracking-[-0.02em] text-[color:var(--color-ink)]"
+          className="text-[clamp(1.34rem,4.9vw,1.82rem)] font-bold leading-[1.22] tracking-[-0.02em] text-[color:var(--color-ink)]"
         >
           루다 하이라이트
         </h1>
@@ -182,14 +182,14 @@ export function LandingHero({ items }: LandingHeroProps) {
               <div className="flex flex-wrap items-center gap-2">
                 <Link
                   href={buildDayLink(primaryImage.takenAt)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 text-[0.84rem] font-semibold text-white"
+                  className="ui-btn ui-btn-primary px-4 text-[0.84rem]"
                 >
                   해당 날짜 앨범으로 이동
                 </Link>
                 <button
                   type="button"
                   onClick={() => setExpanded(false)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-white/16 px-4 text-[0.82rem] font-semibold text-white"
+                  className="ui-btn rounded-full border border-white/25 bg-white/12 px-4 text-[0.82rem] text-white"
                 >
                   닫기
                 </button>
