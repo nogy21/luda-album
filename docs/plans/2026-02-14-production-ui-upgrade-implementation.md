@@ -13,6 +13,7 @@
 ### Task 1: Theme Tokens and Shell Hierarchy Baseline
 
 **Files:**
+
 - Modify: `app/globals.css`
 - Modify: `components/app-shell.tsx`
 - Test: `lib/ui/motion-config.test.ts`
@@ -20,6 +21,7 @@
 **Step 1: Add/normalize new color system tokens and interaction tokens**
 
 Update CSS variables to match new palette:
+
 - Primary `#E96A8D`
 - Background `#FFF9F5`
 - Text `#1F1720`
@@ -50,6 +52,7 @@ git commit -m "design: apply new brand tokens and shell hierarchy baseline"
 ### Task 2: `/photos` Storytelling Hero + Monthly Metadata + GSAP Wow Points
 
 **Files:**
+
 - Modify: `components/app-shell.tsx`
 - Modify: `components/gallery-section.tsx`
 - Modify: `lib/gallery/grouping.ts`
@@ -66,6 +69,7 @@ git commit -m "design: apply new brand tokens and shell hierarchy baseline"
 **Step 2: Run tests to verify RED**
 
 Run:
+
 - `npm run test -- lib/gallery/grouping.test.ts`
 - `npm run test -- lib/ui/hero-intro.test.ts`
 
@@ -95,6 +99,7 @@ git commit -m "feat: upgrade photos storytelling flow with scoped gsap moments"
 ### Task 3: `/guestbook` Form States and Async Feedback UX
 
 **Files:**
+
 - Modify: `components/guestbook-section.tsx`
 
 **Step 1: Implement explicit submit states**
@@ -123,6 +128,7 @@ git commit -m "feat: improve guestbook state feedback and readability"
 ### Task 4: `/admin` Reliability Upload Flow (Progress + Retry)
 
 **Files:**
+
 - Create: `app/admin/page.tsx`
 - Create: `components/admin-console.tsx`
 - Create: `app/api/admin/session/route.ts`
@@ -167,12 +173,14 @@ git commit -m "feat: add reliability-first admin upload flow with progress and r
 ### Task 5: Final Verification and Requirement Traceability
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `docs/plans/2026-02-14-production-ui-upgrade-implementation.md` (checklist footer)
 
 **Step 1: Run full verification**
 
 Run:
+
 - `npm run test`
 - `npm run lint`
 - `npm run build`
