@@ -26,12 +26,12 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2 sm:px-5"
-      style={{ paddingBottom: "max(0.95rem, env(safe-area-inset-bottom))" }}
+      className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-1.5 sm:px-5"
+      style={{ paddingBottom: "max(0.62rem, env(safe-area-inset-bottom))" }}
       aria-label="하단 메뉴"
     >
       <div
-        className="mx-auto grid grid-cols-3 gap-1.5 rounded-[1.3rem] bg-white/84 p-1.5 text-[0.92rem] shadow-[0_16px_34px_rgb(85_48_62/18%)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/70"
+        className="mx-auto grid grid-cols-3 gap-1 rounded-[1.08rem] border border-[color:color-mix(in_srgb,var(--color-line)_76%,#fff_24%)] bg-white/82 p-1 text-[0.88rem] shadow-[0_8px_22px_rgb(28_18_24/11%)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/72"
         style={{ maxWidth }}
       >
         {tabs.map((tab) => {
@@ -41,17 +41,18 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-colors ${active
-                ? "bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
-                : "text-[color:var(--color-muted)] hover:bg-white/70 hover:text-[color:var(--color-ink)]"
-                }`}
+              className={`relative flex min-h-10 items-center justify-center rounded-[0.82rem] px-2.5 py-2 text-center text-[0.84rem] font-semibold transition-colors ${
+                active
+                  ? "bg-white text-[color:var(--color-ink)] shadow-[inset_0_0_0_1px_rgb(236_226_232/72%)]"
+                  : "text-[color:var(--color-muted)] hover:bg-white/78 hover:text-[color:var(--color-ink)]"
+              }`}
               aria-current={active ? "page" : undefined}
             >
-              {tab.label}
+              <span>{tab.label}</span>
               {active ? (
                 <span
                   aria-hidden="true"
-                  className="absolute bottom-1.5 h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand)]"
+                  className="absolute bottom-[0.24rem] h-[2px] w-6 rounded-full bg-[color:var(--color-brand)]"
                 />
               ) : null}
             </Link>
