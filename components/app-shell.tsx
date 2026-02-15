@@ -19,10 +19,10 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen pb-[6.5rem]">
+    <div className="min-h-screen" style={{ paddingBottom: "var(--bottom-nav-safe-space)" }}>
       <a
         href="#main-content"
-        className="ui-btn ui-btn-secondary absolute left-3 top-3 z-50 -translate-y-24 px-3 text-sm focus-visible:translate-y-0"
+        className="ui-btn ui-btn-secondary absolute left-3 top-3 z-[90] -translate-y-24 px-3 text-sm focus-visible:translate-y-0"
       >
         본문으로 건너뛰기
       </a>
@@ -173,7 +173,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       <div className="mb-4 ui-stack-sm" data-hero-intro="meta">
         <p className="ui-eyebrow">Luda Album</p>
         <p className="text-[var(--text-meta)] font-medium text-[color:var(--color-muted)]">
-          마지막 업데이트 · {latestDateLabel}
+          최근 기록 · {latestDateLabel}
         </p>
       </div>
 
@@ -181,28 +181,34 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
         className="max-w-[18ch] text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
         data-hero-intro="title"
       >
-        루다의 새 순간
+        오늘의 루다 순간
       </h1>
       <p
         className="mt-2 max-w-[30ch] text-[var(--text-body)] leading-[var(--leading-body)] text-[color:var(--color-muted)]"
         data-hero-intro="description"
       >
-        오늘의 표정을 먼저 보고, 바로 월별 앨범으로 이어서 감상해요.
+        가장 최근 표정을 먼저 보고, 월별 아카이브로 천천히 이어서 감상해요.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-2.5" data-hero-intro="cta">
         <Link href="#monthly-archive" className="ui-btn ui-btn-primary px-4">
-          이번 달 사진 보기
+          오늘 사진부터 보기
         </Link>
         <button
           type="button"
           onClick={handleShuffle}
           aria-label="대표 사진 다시 섞기"
-          className="ui-btn ui-btn-secondary px-4"
+          className="ui-btn-text px-2.5"
         >
-          다른 순간 보기
+          대표 사진 바꾸기
         </button>
       </div>
+      <p
+        className="mt-1.5 text-[0.78rem] leading-[1.45] text-[color:var(--color-muted)]"
+        data-hero-intro="cta-note"
+      >
+        아카이브에서 월별로 이어서 보실 수 있어요.
+      </p>
 
       <div className="mt-4 grid grid-cols-6 auto-rows-[74px] gap-1.5 sm:auto-rows-[88px]" data-hero-intro="gallery">
         {featuredImages.map((image, index) => (
@@ -240,7 +246,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
             다음 섹션
           </span>
           <span className="block text-[0.84rem] font-medium text-[color:var(--color-ink)]">
-            대표컷과 하이라이트 미리 보기
+            대표컷과 하이라이트 이어 보기
           </span>
         </span>
         <span aria-hidden="true" className="text-base text-[color:var(--color-muted)]">

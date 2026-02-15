@@ -81,7 +81,10 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/45 p-4 backdrop-blur-[2px] sm:p-6">
+    <div
+      className="fixed inset-0 z-[80] flex items-end bg-black/45 p-4 backdrop-blur-[2px] sm:p-6"
+      style={{ paddingBottom: "max(1rem, calc(var(--safe-area-bottom) + 0.7rem))" }}
+    >
       <section
         className="mx-auto w-full max-w-[860px] overflow-hidden rounded-[1.26rem] border border-white/14 bg-[color:var(--color-ink)] text-white shadow-[0_20px_44px_rgba(0,0,0,0.42)]"
         role="dialog"

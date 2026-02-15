@@ -11,7 +11,9 @@
   --color-brand-soft: #fdeef3;
   --color-brand-strong: #c74d72;
   --color-success: #1f7a4a;
+  --color-success-soft: #e9f7ef;
   --color-danger: #b43055;
+  --color-danger-soft: #fdeef2;
   --shadow-soft: 0 4px 14px rgb(28 18 24 / 7%);
   --shadow-card: 0 14px 30px rgb(28 18 24 / 9%);
   --shadow-float: 0 18px 36px rgb(28 18 24 / 14%);
@@ -46,6 +48,12 @@
   --weight-bold: 700;
   --tap-min: 44px;
   --focus-ring: 0 0 0 3px rgb(227 104 141 / 24%);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-height: 4.8rem;
+  --bottom-nav-offset: calc(max(0.62rem, var(--safe-area-bottom)) + var(--bottom-nav-height));
+  --bottom-nav-safe-space: calc(var(--bottom-nav-offset) + 0.9rem);
+  --floating-cta-height: 6.35rem;
+  --landing-bottom-safe-space: calc(var(--bottom-nav-safe-space) + var(--floating-cta-height) + 0.7rem);
 }
 
 .ui-surface {
@@ -176,6 +184,40 @@
 .ui-input:focus-visible {
   border-color: color-mix(in srgb, var(--color-brand) 72%, var(--color-brand-strong) 28%);
   box-shadow: 0 0 0 3px rgb(227 104 141 / 21%);
+}
+
+.ui-status {
+  min-height: var(--tap-min);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-line) 78%, #fff 22%);
+  padding: 0.56rem 0.72rem;
+  font-size: 0.8rem;
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+}
+
+.ui-status-neutral {
+  border-color: color-mix(in srgb, var(--color-line) 82%, #fff 18%);
+  background: color-mix(in srgb, #fff 86%, var(--color-surface) 14%);
+  color: var(--color-muted);
+}
+
+.ui-status-brand {
+  border-color: color-mix(in srgb, var(--color-brand-soft) 76%, var(--color-line) 24%);
+  background: color-mix(in srgb, var(--color-brand-soft) 42%, #fff 58%);
+  color: var(--color-brand-strong);
+}
+
+.ui-status-success {
+  border-color: color-mix(in srgb, var(--color-success) 28%, #fff 72%);
+  background: color-mix(in srgb, var(--color-success-soft) 74%, #fff 26%);
+  color: color-mix(in srgb, var(--color-success) 88%, #1f3f2f 12%);
+}
+
+.ui-status-error {
+  border-color: color-mix(in srgb, var(--color-danger) 30%, #fff 70%);
+  background: color-mix(in srgb, var(--color-danger-soft) 72%, #fff 28%);
+  color: color-mix(in srgb, var(--color-danger) 84%, #3a1f2b 16%);
 }
 
 .ui-stack-sm > * + * {

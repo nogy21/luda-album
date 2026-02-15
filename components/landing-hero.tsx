@@ -120,15 +120,30 @@ export function LandingHero({ items }: LandingHeroProps) {
 
         <h1
           data-landing-intro="title"
-          className="text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
+          className="max-w-[18ch] text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
         >
-          루다 하이라이트
+          오늘의 루다 하이라이트
         </h1>
+        <p
+          className="mt-2 max-w-[31ch] text-[var(--text-body)] leading-[var(--leading-body)] text-[color:var(--color-muted)]"
+          data-landing-intro="description"
+        >
+          오늘 남긴 표정을 먼저 보고, 전체 앨범과 덕담으로 자연스럽게 이어가 보세요.
+        </p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2.5" data-landing-intro="cta">
+          <Link href={buildDayLink(primaryImage.takenAt)} className="ui-btn ui-btn-primary px-4">
+            오늘 사진 보기
+          </Link>
+          <Link href="/photos" className="ui-btn-text px-2.5">
+            전체 앨범
+          </Link>
+        </div>
 
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-4 block w-full overflow-hidden rounded-[0.95rem] bg-[color:var(--color-surface)] text-left"
+          className="mt-3 block w-full overflow-hidden rounded-[0.95rem] bg-[color:var(--color-surface)] text-left"
           data-landing-intro="image"
           aria-label="루다 하이라이트 확대 보기"
         >
@@ -151,7 +166,7 @@ export function LandingHero({ items }: LandingHeroProps) {
 
       {expanded ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/86 p-3"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/86 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="루다 하이라이트 이미지"

@@ -27,11 +27,11 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 px-3.5 pt-1.5 sm:px-5"
-      style={{ paddingBottom: "max(0.62rem, env(safe-area-inset-bottom))" }}
+      style={{ paddingBottom: "max(0.62rem, var(--safe-area-bottom))" }}
       aria-label="하단 메뉴"
     >
       <div
-        className="mx-auto grid grid-cols-3 gap-1 rounded-[1.08rem] border border-[color:color-mix(in_srgb,var(--color-line)_76%,#fff_24%)] bg-white/82 p-1 text-[0.88rem] shadow-[0_8px_22px_rgb(28_18_24/11%)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/72"
+        className="mx-auto grid min-h-[var(--bottom-nav-height)] grid-cols-3 items-stretch gap-1 rounded-[1.08rem] border border-[color:color-mix(in_srgb,var(--color-line)_76%,#fff_24%)] bg-white/82 p-1 text-[0.88rem] shadow-[0_8px_22px_rgb(28_18_24/11%)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/72"
         style={{ maxWidth }}
       >
         {tabs.map((tab) => {
