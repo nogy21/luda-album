@@ -22,7 +22,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen pb-[7.25rem]">
       <a
         href="#main-content"
-        className="absolute left-3 top-3 z-50 -translate-y-24 rounded-full bg-[color:var(--color-brand)] px-3 py-2 text-sm font-semibold text-white transition focus-visible:translate-y-0"
+        className="ui-btn ui-btn-primary absolute left-3 top-3 z-50 -translate-y-24 px-3 text-sm focus-visible:translate-y-0"
       >
         본문으로 건너뛰기
       </a>
@@ -166,10 +166,10 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
   };
 
   return (
-    <section
-      ref={heroRef}
-      className="mb-4 overflow-hidden rounded-[var(--radius-xl)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-card)] sm:p-4.5"
-    >
+      <section
+        ref={heroRef}
+        className="ui-surface mb-4 overflow-hidden rounded-[var(--radius-xl)] p-3.5 sm:p-4.5"
+      >
       <div className="mb-3.5" data-hero-intro="meta">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-brand-strong)]">
           Luda Album
@@ -192,7 +192,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
       <div className="mt-3 flex items-center gap-2" data-hero-intro="cta">
         <Link
           href="#monthly-archive"
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 text-[0.84rem] font-semibold text-white shadow-[0_8px_16px_rgb(233_106_141/28%)] transition-transform duration-200 hover:-translate-y-[1px]"
+          className="ui-btn ui-btn-primary px-4 text-[0.84rem]"
         >
           이번 달 사진 보기
         </Link>
@@ -200,7 +200,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
           type="button"
           onClick={handleShuffle}
           aria-label="대표 사진 다시 섞기"
-          className="inline-flex min-h-11 items-center rounded-full px-3 text-[0.8rem] font-semibold text-[color:var(--color-muted)] underline-offset-2 transition-colors hover:text-[color:var(--color-brand-strong)] hover:underline"
+          className="ui-btn-text text-[0.8rem]"
         >
           다른 순간 보기
         </button>
@@ -234,7 +234,7 @@ export function CoverCard({ images = galleryImages }: CoverCardProps) {
 
       <Link
         href="#gallery-highlights"
-        className="mt-3 flex items-center justify-between rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-left"
+        className="mt-3 flex items-center justify-between rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-left shadow-[var(--shadow-soft)]"
         data-hero-intro="next-preview"
       >
         <span>

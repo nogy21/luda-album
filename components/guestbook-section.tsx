@@ -134,7 +134,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
   return (
     <section
       id="guestbook"
-      className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+      className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-3.5 sm:p-4.5"
     >
       <output className="sr-only" aria-live="polite">
         {asyncAnnounceMessage}
@@ -151,7 +151,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
       </header>
 
       <form
-        className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[0_10px_24px_rgba(147,72,96,0.08)]"
+        className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[var(--shadow-soft)]"
         onSubmit={handleSubmit}
       >
         <div>
@@ -170,7 +170,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             autoComplete="name"
             spellCheck={false}
             placeholder={DEFAULT_GUESTBOOK_NICKNAME}
-            className="w-full rounded-[0.95rem] border border-[color:var(--color-line)] bg-white px-3 py-2.5 text-[0.98rem] text-[color:var(--color-ink)] placeholder:text-[color:var(--color-muted)]/75"
+            className="ui-input w-full px-3 py-2.5 text-[0.95rem] placeholder:text-[color:var(--color-muted)]/75"
           />
         </div>
 
@@ -195,7 +195,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             required
             maxLength={MAX_GUESTBOOK_MESSAGE_LENGTH}
             rows={4}
-            className="w-full rounded-[0.95rem] border border-[color:var(--color-line)] bg-white px-3 py-3 text-[0.98rem] leading-relaxed text-[color:var(--color-ink)]"
+            className="ui-input w-full px-3 py-3 text-[0.95rem] leading-relaxed"
             placeholder="새해 복 많이 받아, 건강하게 자라자…"
           />
           <p className="mt-1.5 text-right text-[0.74rem] font-semibold text-[color:var(--color-muted)]">
@@ -207,7 +207,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
           <button
             type="submit"
             disabled={submitStatus === "posting"}
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2.5 text-[0.9rem] font-semibold text-white shadow-[0_12px_24px_rgba(233,106,141,0.34)] transition hover:bg-[color:var(--color-brand-strong)] disabled:opacity-70"
+            className="ui-btn ui-btn-primary px-4 py-2.5 text-[0.88rem] disabled:opacity-70"
           >
             {submitStatus === "posting" ? "등록 중…" : "덕담 등록"}
           </button>
@@ -242,7 +242,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
         {messages.map((entry) => (
           <article
             key={entry.id}
-            className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 shadow-[0_10px_22px_rgba(147,72,96,0.08)]"
+            className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 shadow-[var(--shadow-soft)]"
           >
             <header className="mb-1.5 flex items-center justify-between gap-2 text-xs">
               <strong className="text-[0.98rem] text-[color:var(--color-ink)]">{entry.nickname}</strong>

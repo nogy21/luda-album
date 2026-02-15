@@ -617,7 +617,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     return (
       <section
         id="gallery"
-        className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-4 shadow-[var(--shadow-soft)]"
+        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4"
       >
         <h2 className="text-[length:var(--text-section-title)] font-bold text-[color:var(--color-ink)]">
           아직 공개된 사진이 없어요
@@ -628,7 +628,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         </p>
         <Link
           href="/admin"
-          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white"
+          className="ui-btn ui-btn-primary mt-4 px-4 py-2 text-sm"
         >
           첫 사진 올리러 가기
         </Link>
@@ -792,7 +792,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     <>
       <section
         id="gallery"
-        className="scroll-mt-24 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-3.5 shadow-[var(--shadow-soft)] sm:p-4.5"
+        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-3.5 sm:p-4.5"
       >
         <div className="mb-4">
           <h2 className="text-[length:var(--text-section-title)] font-bold leading-tight text-[color:var(--color-ink)]">
@@ -809,8 +809,8 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
               type="button"
               onClick={() => setViewMode("timeline")}
               className={`rounded-full px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "timeline"
-                ? "bg-[color:var(--color-brand)] text-white"
-                : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                ? "ui-btn-primary"
+                : "ui-btn-secondary"
                 }`}
             >
               월별 보기
@@ -819,8 +819,8 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
               type="button"
               onClick={() => setViewMode("tags")}
               className={`rounded-full px-3 py-1.5 text-[0.75rem] font-semibold ${viewMode === "tags"
-                ? "bg-[color:var(--color-brand)] text-white"
-                : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                ? "ui-btn-primary"
+                : "ui-btn-secondary"
                 }`}
             >
               태그 모아보기
@@ -835,7 +835,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                   <button
                     type="button"
                     onClick={() => setActiveTag(null)}
-                    className="rounded-full bg-[color:var(--color-brand-soft)] px-3 py-1 text-[0.72rem] font-semibold text-[color:var(--color-brand-strong)]"
+                    className="ui-btn-secondary rounded-full px-3 py-1 text-[0.72rem]"
                   >
                     태그 목록
                   </button>
@@ -958,8 +958,8 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 type="button"
                 onClick={() => openYear(year)}
                 className={`rounded-full px-3 py-1.5 text-[0.74rem] font-semibold transition-colors ${selectedYear === year
-                  ? "bg-[color:var(--color-brand)] text-white"
-                  : "border border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                  ? "ui-btn-primary"
+                  : "ui-btn-secondary"
                   }`}
               >
                 {year}년
@@ -973,7 +973,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                 key={`${group.key}-jump`}
                 type="button"
                 onClick={() => jumpToMonth(group.key)}
-                className="shrink-0 rounded-full border border-[color:var(--color-line)] bg-white px-3 py-1.5 text-[0.72rem] font-semibold text-[color:var(--color-muted)]"
+                className="ui-btn-secondary shrink-0 rounded-full px-3 py-1.5 text-[0.72rem]"
               >
                 {group.month}월
               </button>
@@ -1057,13 +1057,13 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             role="alert"
           >
             <span>{loadError}</span>
-            <button
-              type="button"
-              onClick={() => void loadMore()}
-              className="inline-flex min-h-11 items-center rounded-full border border-rose-200 bg-white px-3 text-[0.78rem] font-semibold"
-            >
-              다시 시도
-            </button>
+              <button
+                type="button"
+                onClick={() => void loadMore()}
+                className="ui-btn-secondary inline-flex border-rose-200 bg-white px-3 text-[0.78rem] font-semibold"
+              >
+                다시 시도
+              </button>
           </div>
         ) : null}
 
@@ -1071,7 +1071,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
           <button
             type="button"
             onClick={() => void loadMore()}
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-white px-4 text-sm font-semibold text-[color:var(--color-muted)]"
+            className="ui-btn ui-btn-secondary mt-3 px-4 text-sm"
           >
               사진 더 보기
             </button>

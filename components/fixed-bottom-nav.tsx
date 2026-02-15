@@ -31,7 +31,7 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
       aria-label="하단 메뉴"
     >
       <div
-        className="mx-auto grid grid-cols-3 gap-1.5 rounded-[1.35rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-1.5 text-[0.94rem] shadow-[var(--shadow-card)]"
+        className="mx-auto grid grid-cols-3 gap-1.5 rounded-[1.3rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-1.5 text-[0.92rem] shadow-[var(--shadow-soft)]"
         style={{ maxWidth }}
       >
         {tabs.map((tab) => {
@@ -42,8 +42,8 @@ export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
               key={tab.href}
               href={tab.href}
               className={`relative flex min-h-11 items-center justify-center rounded-[1rem] px-3 py-2.5 text-center text-[0.95rem] font-semibold transition-all ${active
-                ? "bg-[color:var(--color-brand)] text-white shadow-[0_8px_18px_rgb(233_106_141/34%)]"
-                : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)] active:scale-[0.99]"
+                ? "bg-[color:var(--color-brand)] text-white shadow-[0_4px_10px_rgb(233_106_141/20%)]"
+                : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-brand-soft)]"
                 }`}
               aria-current={active ? "page" : undefined}
             >

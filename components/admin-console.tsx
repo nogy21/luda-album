@@ -303,7 +303,7 @@ export function AdminConsole() {
 
   if (!authenticated) {
     return (
-      <section className="mx-auto w-full max-w-xl space-y-4 rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-4 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="ui-surface mx-auto w-full max-w-xl space-y-4 rounded-[var(--radius-lg)] p-4 sm:p-6">
         <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">관리자 업로드</h1>
         <p className="text-sm text-[color:var(--color-muted)]">
           사진 업로드는 관리자 계정으로만 가능합니다.
@@ -353,7 +353,7 @@ export function AdminConsole() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="min-h-11 w-full rounded-[0.95rem] border border-[color:var(--color-line)] bg-white px-3 text-base"
+              className="ui-input min-h-11 w-full px-3 text-base"
               required
             />
           </div>
@@ -361,21 +361,21 @@ export function AdminConsole() {
           <button
             type="submit"
             disabled={authLoading}
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-5 text-base font-semibold text-white disabled:opacity-60"
+            className="ui-btn ui-btn-primary px-5 text-base disabled:opacity-60"
           >
             {authLoading ? "인증 중…" : "로그인"}
           </button>
         </form>
 
-        <p className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3 text-sm text-[color:var(--color-muted)]" role="status">
+        <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3 text-sm text-[color:var(--color-muted)]">
           {statusText}
-        </p>
+        </output>
       </section>
     );
   }
 
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-4 rounded-[var(--radius-lg)] border border-[color:var(--color-line)] bg-[color:var(--color-surface-strong)] p-4 shadow-[var(--shadow-soft)] sm:p-6">
+    <section className="ui-surface mx-auto w-full max-w-3xl space-y-4 rounded-[var(--radius-lg)] p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">관리자 업로드</h1>
@@ -391,21 +391,21 @@ export function AdminConsole() {
             setQueue([]);
             setStatusText("로그아웃되었습니다.");
           }}
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] px-4 text-sm font-semibold text-[color:var(--color-muted)]"
+          className="ui-btn ui-btn-secondary px-4 text-sm"
         >
           로그아웃
         </button>
       </header>
 
-      <p className="sr-only" role="status" aria-live="polite">
+      <output className="sr-only" aria-live="polite">
         {statusText}
-      </p>
+      </output>
 
-      <section className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5">
+      <section className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-3.5 shadow-[var(--shadow-soft)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-[color:var(--color-ink)]">업로드 범위</p>
           <div className="flex items-center gap-2">
-            <label className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-line)] bg-white px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+            <label className="ui-btn-secondary inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted)]">
               <input
                 type="radio"
                 name="visibility"
@@ -415,7 +415,7 @@ export function AdminConsole() {
               />
               가족 전용
             </label>
-            <label className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-line)] bg-white px-3 text-xs font-semibold text-[color:var(--color-muted)]">
+            <label className="ui-btn-secondary inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted)]">
               <input
                 type="radio"
                 name="visibility"
@@ -436,7 +436,7 @@ export function AdminConsole() {
             accept="image/*"
             multiple
             onChange={(event) => handleQueueFiles(event.target.files)}
-            className="min-h-11 flex-1 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-2 text-sm text-[color:var(--color-muted)]"
+            className="ui-input min-h-11 flex-1 p-2 text-sm text-[color:var(--color-muted)]"
           />
           <button
             type="button"
@@ -447,7 +447,7 @@ export function AdminConsole() {
               setQueue([]);
               setStatusText("업로드 대기열을 비웠어요.");
             }}
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] px-3.5 text-sm font-semibold text-[color:var(--color-muted)]"
+            className="ui-btn ui-btn-secondary px-3.5 text-sm"
           >
             초기화
           </button>
@@ -475,7 +475,7 @@ export function AdminConsole() {
             type="button"
             onClick={() => void runUpload(queuedItems)}
             disabled={isUploading || queuedItems.length === 0}
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-brand)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(233,106,141,0.3)] disabled:opacity-60"
+            className="ui-btn ui-btn-primary px-4 text-sm disabled:opacity-60"
           >
             {isUploading ? "업로드 중…" : `대기 파일 업로드 (${queuedItems.length})`}
           </button>
@@ -483,16 +483,16 @@ export function AdminConsole() {
             type="button"
             onClick={() => void handleRetryFailed()}
             disabled={isUploading || failedItems.length === 0}
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-line)] px-4 text-sm font-semibold text-[color:var(--color-muted)] disabled:opacity-60"
+            className="ui-btn ui-btn-secondary px-4 text-sm disabled:opacity-60"
           >
             실패 항목 재시도 ({failedItems.length})
           </button>
         </div>
       </section>
 
-      <p className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-muted)]" role="status">
+      <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-muted)]">
         {statusText}
-      </p>
+      </output>
 
       {queue.length > 0 ? (
         <ul className="space-y-2.5">
