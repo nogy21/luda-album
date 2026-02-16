@@ -3,7 +3,12 @@ import {
   sanitizeEventNames,
 } from "./event-names";
 
-type QueryError = { message: string } | null;
+type QueryError = {
+  message: string;
+  code?: string | null;
+  details?: string | null;
+  hint?: string | null;
+} | null;
 
 type GalleryEventRow = {
   id: string;
@@ -23,6 +28,25 @@ type RepositoryClient = {
 
 const EVENTS_TABLE = "gallery_events";
 const PHOTO_EVENTS_TABLE = "gallery_photo_events";
+
+const isMissingRelationError = (error: QueryError, tableName: string) => {
+  if (!error) {
+    return false;
+  }
+
+  if (error.code === "42P01") {
+    return true;
+  }
+
+  const lowerMessage = error.message.toLowerCase();
+  const lowerTable = tableName.toLowerCase();
+
+  return (
+    lowerMessage.includes("could not find the table") ||
+    lowerMessage.includes("relation") && lowerMessage.includes("does not exist") ||
+    lowerMessage.includes(lowerTable)
+  );
+};
 
 const clampSuggestionLimit = (limit?: number) => {
   if (typeof limit !== "number" || Number.isNaN(limit)) {
@@ -77,6 +101,10 @@ export const upsertEventNames = async (
     .select("id, name, normalized_name, updated_at");
 
   if (error) {
+    if (isMissingRelationError(error, EVENTS_TABLE)) {
+      return [];
+    }
+
     throw new Error(`Failed to upsert gallery events: ${error.message}`);
   }
 
@@ -95,6 +123,10 @@ export const upsertEventNames = async (
     .in("normalized_name", normalizedNames);
 
   if (selectError) {
+    if (isMissingRelationError(selectError, EVENTS_TABLE)) {
+      return [];
+    }
+
     throw new Error(`Failed to load gallery events: ${selectError.message}`);
   }
 
@@ -119,6 +151,10 @@ export const replacePhotoEvents = async (
     .eq("photo_id", photoId);
 
   if (deleteError) {
+    if (isMissingRelationError(deleteError, PHOTO_EVENTS_TABLE)) {
+      return [];
+    }
+
     throw new Error(`Failed to clear gallery photo events: ${deleteError.message}`);
   }
 
@@ -158,6 +194,10 @@ export const replacePhotoEvents = async (
   const { error: insertError } = await relationInsertBuilder.insert(relationRows);
 
   if (insertError) {
+    if (isMissingRelationError(insertError, PHOTO_EVENTS_TABLE)) {
+      return [];
+    }
+
     throw new Error(`Failed to link gallery photo events: ${insertError.message}`);
   }
 
@@ -188,6 +228,16 @@ export const listEventNamesByPhotoIds = async (
     .in("photo_id", uniquePhotoIds);
 
   if (relationError) {
+    if (isMissingRelationError(relationError, PHOTO_EVENTS_TABLE)) {
+      const emptyResult = new Map<string, string[]>();
+
+      for (const photoId of uniquePhotoIds) {
+        emptyResult.set(photoId, []);
+      }
+
+      return emptyResult;
+    }
+
     throw new Error(`Failed to load gallery photo event links: ${relationError.message}`);
   }
 
@@ -209,6 +259,10 @@ export const listEventNamesByPhotoIds = async (
       .in("id", eventIds);
 
     if (eventError) {
+      if (isMissingRelationError(eventError, EVENTS_TABLE)) {
+        return new Map(uniquePhotoIds.map((photoId) => [photoId, []] as const));
+      }
+
       throw new Error(`Failed to load gallery event names: ${eventError.message}`);
     }
 
@@ -282,6 +336,10 @@ export const listEventSuggestions = async (
     : await eventsQuery.order("updated_at", { ascending: false }).limit(200);
 
   if (eventsError) {
+    if (isMissingRelationError(eventsError, EVENTS_TABLE)) {
+      return [];
+    }
+
     throw new Error(`Failed to list gallery events: ${eventsError.message}`);
   }
 
@@ -308,6 +366,22 @@ export const listEventSuggestions = async (
     );
 
   if (relationError) {
+    if (isMissingRelationError(relationError, PHOTO_EVENTS_TABLE)) {
+      return events
+        .sort((left, right) => {
+          if (left.normalized_name.startsWith(normalizedQuery) && !right.normalized_name.startsWith(normalizedQuery)) {
+            return -1;
+          }
+          if (!left.normalized_name.startsWith(normalizedQuery) && right.normalized_name.startsWith(normalizedQuery)) {
+            return 1;
+          }
+
+          return +new Date(right.updated_at ?? 0) - +new Date(left.updated_at ?? 0);
+        })
+        .slice(0, suggestionLimit)
+        .map((event) => event.name);
+    }
+
     throw new Error(`Failed to list gallery event usage: ${relationError.message}`);
   }
 

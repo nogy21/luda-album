@@ -94,6 +94,33 @@ describe("gallery events repository", () => {
     expect(names).toEqual(["여행", "돌잔치"]);
   });
 
+  test("replacePhotoEvents ignores missing relation table and returns empty", async () => {
+    const relationEq = vi.fn().mockResolvedValue({
+      error: {
+        message:
+          "Could not find the table 'public.gallery_photo_events' in the schema cache",
+      },
+    });
+    const photoEventsBuilder = {
+      delete: vi.fn(() => ({
+        eq: relationEq,
+      })),
+    };
+
+    const from = vi.fn((table: string) => {
+      if (table === "gallery_photo_events") {
+        return photoEventsBuilder;
+      }
+
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const names = await replacePhotoEvents({ from }, "photo-1", ["여행"]);
+
+    expect(relationEq).toHaveBeenCalledWith("photo_id", "photo-1");
+    expect(names).toEqual([]);
+  });
+
   test("listEventNamesByPhotoIds groups event names per photo", async () => {
     const relationIn = vi.fn().mockResolvedValue({
       data: [
@@ -138,6 +165,34 @@ describe("gallery events repository", () => {
 
     expect(mapped.get("photo-1")).toEqual(["여행", "돌잔치"]);
     expect(mapped.get("photo-2")).toEqual(["여행"]);
+  });
+
+  test("listEventNamesByPhotoIds returns empty map values when relation table is missing", async () => {
+    const relationIn = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          "Could not find the table 'public.gallery_photo_events' in the schema cache",
+      },
+    });
+    const photoEventsBuilder = {
+      select: vi.fn(() => ({
+        in: relationIn,
+      })),
+    };
+
+    const from = vi.fn((table: string) => {
+      if (table === "gallery_photo_events") {
+        return photoEventsBuilder;
+      }
+
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const mapped = await listEventNamesByPhotoIds({ from }, ["photo-1", "photo-2"]);
+
+    expect(mapped.get("photo-1")).toEqual([]);
+    expect(mapped.get("photo-2")).toEqual([]);
   });
 
   test("listEventSuggestions sorts by usage and query prefix", async () => {
@@ -190,5 +245,38 @@ describe("gallery events repository", () => {
     const suggestions = await listEventSuggestions({ from }, "여", 2);
 
     expect(suggestions).toEqual(["여행기", "여행"]);
+  });
+
+  test("listEventSuggestions returns empty when events table is missing", async () => {
+    const eventsLimit = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          "Could not find the table 'public.gallery_events' in the schema cache",
+      },
+    });
+    const eventsOrder = vi.fn(() => ({
+      limit: eventsLimit,
+    }));
+    const eventsBuilder = {
+      select: vi.fn(() => ({
+        ilike: vi.fn(() => ({
+          order: eventsOrder,
+        })),
+        order: eventsOrder,
+      })),
+    };
+
+    const from = vi.fn((table: string) => {
+      if (table === "gallery_events") {
+        return eventsBuilder;
+      }
+
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const suggestions = await listEventSuggestions({ from }, "여", 5);
+
+    expect(suggestions).toEqual([]);
   });
 });

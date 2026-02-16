@@ -88,6 +88,28 @@ type AdminPwaBrandingApiResult = {
 const PAGE_LIMIT = 24;
 const MAX_CAPTION_LENGTH = 120;
 const MAX_PWA_LOGO_SIZE_BYTES = 10 * 1024 * 1024;
+const LARGE_QUEUE_COMPACT_THRESHOLD = 16;
+const QUEUE_RENDER_STEP = 24;
+
+type QueueFilter = "all" | UploadQueueItem["status"];
+
+const QUEUE_FILTERS: Array<{
+  key: QueueFilter;
+  label: string;
+}> = [
+  { key: "all", label: "전체" },
+  { key: "queued", label: "대기" },
+  { key: "uploading", label: "업로드 중" },
+  { key: "success", label: "성공" },
+  { key: "error", label: "실패" },
+];
+
+const QUEUE_STATUS_LABEL: Record<UploadQueueItem["status"], string> = {
+  queued: "대기",
+  uploading: "업로드 중",
+  success: "성공",
+  error: "실패",
+};
 
 const toDateTimeLocalValue = (iso: string) => {
   const date = new Date(iso);
@@ -438,6 +460,10 @@ export function AdminConsole() {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
+  const [queueCompactMode, setQueueCompactMode] = useState(false);
+  const [expandedQueueItemIds, setExpandedQueueItemIds] = useState<string[]>([]);
+  const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_RENDER_STEP);
   const [isUploading, setIsUploading] = useState(false);
   const [statusText, setStatusText] = useState("업로드할 사진을 선택해 주세요.");
   const [uploadVisibility, setUploadVisibility] = useState<"family" | "admin">("family");
@@ -500,6 +526,25 @@ export function AdminConsole() {
   }, []);
 
   const summary = useMemo(() => getQueueSummary(queue), [queue]);
+  const queueStatusCounts = useMemo(
+    () => ({
+      all: queue.length,
+      queued: queue.filter((item) => item.status === "queued").length,
+      uploading: queue.filter((item) => item.status === "uploading").length,
+      success: queue.filter((item) => item.status === "success").length,
+      error: queue.filter((item) => item.status === "error").length,
+    }),
+    [queue],
+  );
+  const filteredQueue = useMemo(
+    () => (queueFilter === "all" ? queue : queue.filter((item) => item.status === queueFilter)),
+    [queue, queueFilter],
+  );
+  const visibleQueue = useMemo(
+    () => filteredQueue.slice(0, visibleQueueCount),
+    [filteredQueue, visibleQueueCount],
+  );
+  const hiddenFilteredQueueCount = Math.max(0, filteredQueue.length - visibleQueue.length);
   const queuedItems = useMemo(
     () => queue.filter((item) => item.status === "queued"),
     [queue],
@@ -520,6 +565,36 @@ export function AdminConsole() {
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
+
+  useEffect(() => {
+    setExpandedQueueItemIds((current) =>
+      current.filter((itemId) => queue.some((item) => item.id === itemId)),
+    );
+
+    if (queue.length === 0) {
+      setQueueFilter("all");
+      setQueueCompactMode(false);
+      return;
+    }
+
+    if (queue.length >= LARGE_QUEUE_COMPACT_THRESHOLD && !queueCompactMode) {
+      setQueueCompactMode(true);
+    }
+  }, [queue, queueCompactMode]);
+
+  useEffect(() => {
+    setVisibleQueueCount(QUEUE_RENDER_STEP);
+  }, [queueFilter]);
+
+  useEffect(() => {
+    setVisibleQueueCount((current) => {
+      if (filteredQueue.length === 0) {
+        return QUEUE_RENDER_STEP;
+      }
+
+      return Math.min(Math.max(current, QUEUE_RENDER_STEP), filteredQueue.length);
+    });
+  }, [filteredQueue.length]);
 
   useEffect(() => {
     return () => {
@@ -725,6 +800,33 @@ export function AdminConsole() {
       }
       return current.filter((item) => item.id !== itemId);
     });
+    setExpandedQueueItemIds((current) => current.filter((id) => id !== itemId));
+  };
+
+  const toggleQueueItemExpanded = (itemId: string) => {
+    setExpandedQueueItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId],
+    );
+  };
+
+  const expandAllFilteredQueueItems = () => {
+    setExpandedQueueItemIds((current) => {
+      const merged = new Set(current);
+
+      for (const item of filteredQueue) {
+        merged.add(item.id);
+      }
+
+      return Array.from(merged);
+    });
+  };
+
+  const collapseAllFilteredQueueItems = () => {
+    const hiddenSet = new Set(filteredQueue.map((item) => item.id));
+
+    setExpandedQueueItemIds((current) => current.filter((id) => !hiddenSet.has(id)));
   };
 
   const applyBulkMetadataToQueue = () => {
@@ -1560,12 +1662,72 @@ export function AdminConsole() {
       </section>
 
       {queue.length > 0 ? (
-        <ul className="space-y-2.5">
-          {queue.map((item) => {
+        <section className="space-y-2.5">
+          <div className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {QUEUE_FILTERS.map((filter) => {
+                  const active = queueFilter === filter.key;
+                  const count = queueStatusCounts[filter.key];
+
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setQueueFilter(filter.key)}
+                      className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold ${
+                        active
+                          ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                          : "border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-muted)]"
+                      }`}
+                    >
+                      {filter.label} {count}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQueueCompactMode((current) => !current)}
+                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
+                >
+                  {queueCompactMode ? "컴팩트 해제" : "컴팩트"}
+                </button>
+                <button
+                  type="button"
+                  onClick={expandAllFilteredQueueItems}
+                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
+                >
+                  모두 펼치기
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllFilteredQueueItems}
+                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
+                >
+                  모두 접기
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {filteredQueue.length === 0 ? (
+            <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.84rem] text-[color:var(--color-muted)]">
+              현재 필터에 해당하는 항목이 없어요.
+            </p>
+          ) : null}
+
+          <ul className="space-y-2.5">
+            {visibleQueue.map((item) => {
             const metadataEditDisabled =
               isUploading || item.status === "uploading" || item.status === "success";
             const canRemoveQueueItem =
               (item.status === "queued" || item.status === "error") && !isUploading;
+            const isExpanded = expandedQueueItemIds.includes(item.id);
+            const showMetadataEditor =
+              !queueCompactMode || isExpanded || item.status === "error";
 
             return (
               <li
@@ -1595,7 +1757,7 @@ export function AdminConsole() {
                           {item.visibility === "admin" ? "관리자 전용" : "가족 전용"}
                         </span>
                         <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] font-semibold text-[color:var(--color-muted)]">
-                          {item.status}
+                          {QUEUE_STATUS_LABEL[item.status]}
                         </span>
                         <button
                           type="button"
@@ -1605,36 +1767,52 @@ export function AdminConsole() {
                         >
                           제거
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleQueueItemExpanded(item.id)}
+                          className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]"
+                        >
+                          {showMetadataEditor ? "접기" : "상세"}
+                        </button>
                       </div>
                     </div>
-                    <input
-                      value={item.caption}
-                      onChange={(event) => updateQueueCaption(item.id, event.target.value)}
-                      maxLength={MAX_CAPTION_LENGTH}
-                      disabled={metadataEditDisabled}
-                      className="ui-input min-h-10 w-full px-3 text-[0.82rem] disabled:opacity-60"
-                      placeholder="캡션"
-                    />
-                    <input
-                      type="datetime-local"
-                      value={item.takenAtInput}
-                      onChange={(event) => updateQueueTakenAtInput(item.id, event.target.value)}
-                      disabled={metadataEditDisabled}
-                      className="ui-input min-h-10 w-full px-3 text-[0.79rem] disabled:opacity-60"
-                    />
-                    <EventChipsInput
-                      value={item.eventNames}
-                      onChange={(eventNames) => updateQueueEventNames(item.id, eventNames)}
-                      disabled={metadataEditDisabled}
-                      placeholder="이벤트 입력 후 Enter"
-                    />
-                    <p className="text-[0.72rem] text-[color:var(--color-muted)]">
-                      {item.metadataLoading
-                        ? "메타데이터(날짜/위치) 추출 중…"
-                        : item.locationLabel
-                          ? `위치 추정: ${item.locationLabel}`
-                          : "위치정보 없음"}
-                    </p>
+
+                    {showMetadataEditor ? (
+                      <>
+                        <input
+                          value={item.caption}
+                          onChange={(event) => updateQueueCaption(item.id, event.target.value)}
+                          maxLength={MAX_CAPTION_LENGTH}
+                          disabled={metadataEditDisabled}
+                          className="ui-input min-h-10 w-full px-3 text-[0.82rem] disabled:opacity-60"
+                          placeholder="캡션"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={item.takenAtInput}
+                          onChange={(event) => updateQueueTakenAtInput(item.id, event.target.value)}
+                          disabled={metadataEditDisabled}
+                          className="ui-input min-h-10 w-full px-3 text-[0.79rem] disabled:opacity-60"
+                        />
+                        <EventChipsInput
+                          value={item.eventNames}
+                          onChange={(eventNames) => updateQueueEventNames(item.id, eventNames)}
+                          disabled={metadataEditDisabled}
+                          placeholder="이벤트 입력 후 Enter"
+                        />
+                        <p className="text-[0.72rem] text-[color:var(--color-muted)]">
+                          {item.metadataLoading
+                            ? "메타데이터(날짜/위치) 추출 중…"
+                            : item.locationLabel
+                              ? `위치 추정: ${item.locationLabel}`
+                              : "위치정보 없음"}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-[0.72rem] text-[color:var(--color-muted)]">
+                        {item.caption} · {item.takenAtInput.replace("T", " ")} · 이벤트 {item.eventNames.length}개
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-[color:var(--color-brand-soft)]">
@@ -1670,8 +1848,31 @@ export function AdminConsole() {
                 ) : null}
               </li>
             );
-          })}
-        </ul>
+            })}
+          </ul>
+          {hiddenFilteredQueueCount > 0 ? (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setVisibleQueueCount((current) =>
+                    Math.min(current + QUEUE_RENDER_STEP, filteredQueue.length),
+                  );
+                }}
+                className="ui-btn ui-btn-secondary px-4 text-[0.78rem]"
+              >
+                더 보기 ({hiddenFilteredQueueCount}개 남음)
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleQueueCount(filteredQueue.length)}
+                className="ui-btn ui-btn-secondary px-4 text-[0.78rem]"
+              >
+                모두 보기
+              </button>
+            </div>
+          ) : null}
+        </section>
       ) : (
         <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.88rem] text-[color:var(--color-muted)]">
           아직 업로드 대기 파일이 없어요.
