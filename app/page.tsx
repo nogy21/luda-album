@@ -27,7 +27,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="page-bottom-safe page-bottom-safe--guestbook-cta min-h-screen">
+    <div className="page-bottom-safe min-h-screen">
       <LudaDayBanner birthDateIso="2025-10-22T00:00:00.000Z" />
       <LandingHero items={items} />
       <div className="layout-container mt-[var(--space-section-sm)]">
