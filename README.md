@@ -30,21 +30,21 @@ npm run build
 환경 변수가 없으면 덕담 기능은 인메모리 fallback으로 동작합니다.  
 `/admin` 업로드는 Supabase Storage 설정이 필요합니다.
 
-`.env.local`
+`.env.local` (로컬 개발)
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-# 배포에서 NEXT_PUBLIC_*를 쓰기 어렵다면 서버 전용 키로도 동작
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-# 선택: 서버 전용 권한 키
-SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_SECRET_KEY=...
 SUPABASE_STORAGE_BUCKET=luda-photos
 GALLERY_PHOTOS_TABLE=gallery_photos
+APP_SETTINGS_TABLE=app_settings
 ADMIN_UPLOAD_PASSWORD=...
 ADMIN_SESSION_SECRET=...
 ```
+
+Vercel 배포에서는 로컬 `.env.local`/`.env` 파일을 읽지 않고,  
+Vercel Project Settings 또는 `vercel env`에 설정된 변수만 사용합니다.
 
 DB 스키마는 `docs/db/guestbook.sql`을 사용하세요.
 
@@ -79,6 +79,24 @@ WEB_PUSH_SUBSCRIPTIONS_TABLE=web_push_subscriptions
 1. Vercel에 프로젝트 연결
 2. 환경 변수 설정 (Supabase 사용 시)
 3. 프로덕션 URL 공유
+
+## GitHub Actions CI/CD
+
+이 저장소에는 아래 워크플로우가 포함되어 있습니다.
+
+- `/.github/workflows/ci.yml`: `main` push / PR 시 `lint + test + build`
+- `/.github/workflows/deploy-vercel.yml`: `main` push 시 Vercel 프로덕션 배포
+
+GitHub Repository Secrets를 아래처럼 등록해야 동작합니다.
+
+```env
+VERCEL_TOKEN=...
+VERCEL_ORG_ID=team_P2bM3y4WJ4XJyL7nRzahqvo8
+VERCEL_PROJECT_ID=prj_SoaYkYjcDB9lO09W08comb1FIL5b
+```
+
+`VERCEL_TOKEN`은 Vercel Personal Token을 사용합니다.
+이미 Vercel Git Integration 자동 배포를 쓰고 있다면, 중복 배포를 피하려고 둘 중 하나만 활성화하세요.
 
 ## Migration Note (2026-02-14)
 
