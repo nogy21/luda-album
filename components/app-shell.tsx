@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { FixedBottomNav } from "@/components/fixed-bottom-nav";
 import { getRandomDateItems } from "@/lib/gallery/featured";
-import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
+import type { GalleryImage } from "@/lib/gallery/images";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 type AppShellProps = {
@@ -42,7 +42,7 @@ type CoverCardProps = {
   images?: GalleryImage[];
 };
 
-export function CoverCard({ images = galleryImages }: CoverCardProps) {
+export function CoverCard({ images = [] }: CoverCardProps) {
   const [shuffleSeed, setShuffleSeed] = useState(() => Math.random());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);

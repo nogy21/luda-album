@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { galleryImages } from "@/lib/gallery/images";
-import {
-  listPhotosMonthPageFromDatabase,
-  mapGalleryImageToPhotoItem,
-} from "@/lib/gallery/repository";
+import { listPhotosMonthPageFromDatabase } from "@/lib/gallery/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { PhotoItem, PhotoMonthPageResponse } from "@/lib/gallery/types";
+import type { PhotoMonthPageResponse } from "@/lib/gallery/types";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 96;
@@ -33,70 +29,13 @@ const clampLimit = (value?: number) => {
   return Math.min(MAX_LIMIT, Math.max(1, value));
 };
 
-const parseCursorTakenAt = (cursor?: string) => {
-  if (!cursor) {
-    return null;
-  }
-
-  const [takenAt] = cursor.split("|");
-
-  if (!takenAt) {
-    return null;
-  }
-
-  const parsedDate = new Date(takenAt);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return parsedDate.toISOString();
-};
-
-const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {
-  return +new Date(right.takenAt) - +new Date(left.takenAt);
-};
-
-const buildStaticMonthResponse = ({
+const buildEmptyMonthResponse = (year: number, month: number): PhotoMonthPageResponse => ({
   year,
   month,
-  cursor,
-  limit,
-}: {
-  year: number;
-  month: number;
-  cursor?: string;
-  limit: number;
-}): PhotoMonthPageResponse => {
-  const allItems = galleryImages
-    .map(mapGalleryImageToPhotoItem)
-    .filter((item) => item.visibility === "family")
-    .filter((item) => {
-      const date = new Date(item.takenAt);
-      return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month;
-    })
-    .sort(sortByTakenAtDesc);
-  const cursorTakenAt = parseCursorTakenAt(cursor);
-
-  const cursorFiltered = cursorTakenAt
-    ? allItems.filter((item) => +new Date(item.takenAt) < +new Date(cursorTakenAt))
-    : allItems;
-
-  const pageItems = cursorFiltered.slice(0, limit);
-  const hasMore = cursorFiltered.length > limit;
-  const nextCursor =
-    hasMore && pageItems.length > 0
-      ? `${pageItems[pageItems.length - 1].takenAt}|${pageItems[pageItems.length - 1].id}`
-      : null;
-
-  return {
-    year,
-    month,
-    key: `${year}-${String(month).padStart(2, "0")}`,
-    items: pageItems,
-    nextCursor,
-  };
-};
+  key: `${year}-${String(month).padStart(2, "0")}`,
+  items: [],
+  nextCursor: null,
+});
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -126,14 +65,11 @@ export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
 
   if (!supabase) {
-    return NextResponse.json(
-      buildStaticMonthResponse({ year, month, cursor, limit }),
-      {
-        headers: {
-          "Cache-Control": "s-maxage=60, stale-while-revalidate=600",
-        },
+    return NextResponse.json(buildEmptyMonthResponse(year, month), {
+      headers: {
+        "Cache-Control": "s-maxage=60, stale-while-revalidate=600",
       },
-    );
+    });
   }
 
   try {
@@ -155,12 +91,8 @@ export async function GET(request: Request) {
     });
   } catch {
     return NextResponse.json(
-      buildStaticMonthResponse({ year, month, cursor, limit }),
-      {
-        headers: {
-          "Cache-Control": "s-maxage=30, stale-while-revalidate=300",
-        },
-      },
+      { error: "월별 사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요." },
+      { status: 502 },
     );
   }
 }

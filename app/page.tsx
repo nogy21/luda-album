@@ -4,19 +4,13 @@ import { LandingHero } from "@/components/landing-hero";
 import { LandingRecentSection } from "@/components/landing-recent-section";
 import { LudaDayBanner } from "@/components/luda-day-banner";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
-import { galleryImages } from "@/lib/gallery/images";
-import {
-  listPhotosPageFromDatabase,
-  mapGalleryImageToPhotoItem,
-} from "@/lib/gallery/repository";
+import { listPhotosPageFromDatabase } from "@/lib/gallery/repository";
+import type { PhotoItem } from "@/lib/gallery/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function Home() {
   const supabase = createServerSupabaseClient();
-  let items = galleryImages
-    .map(mapGalleryImageToPhotoItem)
-    .filter((item) => item.visibility === "family")
-    .sort((left, right) => +new Date(right.takenAt) - +new Date(left.takenAt));
+  let items: PhotoItem[] = [];
 
   if (supabase) {
     try {
@@ -25,9 +19,7 @@ export default async function Home() {
         visibility: "family",
       });
 
-      if (response.items.length > 0) {
-        items = response.items;
-      }
+      items = response.items;
     } catch (error) {
       void error;
     }

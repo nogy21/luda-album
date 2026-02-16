@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
-import { galleryImages } from "@/lib/gallery/images";
-import {
-  listPhotosPageFromDatabase,
-  mapGalleryImageToPhotoItem,
-  mapPhotoItemToGalleryImage,
-} from "@/lib/gallery/repository";
+import { listPhotosPageFromDatabase } from "@/lib/gallery/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { PhotoItem, PhotoListResponse, YearMonthStat } from "@/lib/gallery/types";
+import type { PhotoListResponse } from "@/lib/gallery/types";
 
 const DEFAULT_LIMIT = 36;
 const MAX_LIMIT = 96;
@@ -35,109 +29,14 @@ const clampLimit = (value?: number) => {
   return Math.min(MAX_LIMIT, Math.max(1, value));
 };
 
-const parseCursorTakenAt = (cursor?: string) => {
-  if (!cursor) {
-    return null;
-  }
-
-  const [takenAt] = cursor.split("|");
-
-  if (!takenAt) {
-    return null;
-  }
-
-  const parsedDate = new Date(takenAt);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return parsedDate.toISOString();
-};
-
-const buildYearMonthStats = (items: PhotoItem[]): YearMonthStat[] => {
-  const grouped = groupGalleryImagesByMonth(items.map(mapPhotoItemToGalleryImage));
-
-  return grouped.map((group) => ({
-    key: group.key,
-    year: group.year,
-    month: group.month,
-    count: group.items.length,
-    latestTakenAt: group.latestTakenAt,
-    latestUpdatedAt: group.latestUpdatedAt,
-    label: group.label,
-    updatedLabel: group.updatedLabel,
-    metaLabel: group.metaLabel,
-  }));
-};
-
-const applyDateFilter = (
-  items: PhotoItem[],
-  year?: number,
-  month?: number,
-  day?: number,
-) => {
-  if (!year) {
-    return items;
-  }
-
-  return items.filter((item) => {
-    const date = new Date(item.takenAt);
-    const itemYear = date.getUTCFullYear();
-    const itemMonth = date.getUTCMonth() + 1;
-
-    if (month && day) {
-      return itemYear === year && itemMonth === month && date.getUTCDate() === day;
-    }
-
-    if (month) {
-      return itemYear === year && itemMonth === month;
-    }
-
-    return itemYear === year;
-  });
-};
-
-const buildStaticResponse = ({
-  cursor,
-  limit,
-  year,
-  month,
-  day,
-}: {
-  cursor?: string;
-  limit: number;
-  year?: number;
-  month?: number;
-  day?: number;
-}): PhotoListResponse => {
-  const allItems = galleryImages
-    .map(mapGalleryImageToPhotoItem)
-    .filter((item) => item.visibility === "family")
-    .sort((left, right) => +new Date(right.takenAt) - +new Date(left.takenAt));
-  const filtered = applyDateFilter(allItems, year, month, day);
-  const cursorTakenAt = parseCursorTakenAt(cursor);
-
-  const cursorFiltered = cursorTakenAt
-    ? filtered.filter((item) => +new Date(item.takenAt) < +new Date(cursorTakenAt))
-    : filtered;
-
-  const pageItems = cursorFiltered.slice(0, limit);
-  const hasMore = cursorFiltered.length > limit;
-  const nextCursor =
-    hasMore && pageItems.length > 0
-      ? `${pageItems[pageItems.length - 1].takenAt}|${pageItems[pageItems.length - 1].id}`
-      : null;
-
-  return {
-    items: pageItems,
-    nextCursor,
-    summary: {
-      totalCount: filtered.length,
-      yearMonthStats: buildYearMonthStats(filtered),
-    },
-  };
-};
+const buildEmptyResponse = (): PhotoListResponse => ({
+  items: [],
+  nextCursor: null,
+  summary: {
+    totalCount: 0,
+    yearMonthStats: [],
+  },
+});
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -177,9 +76,7 @@ export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
 
   if (!supabase) {
-    const fallback = buildStaticResponse({ cursor, limit, year, month, day });
-
-    return NextResponse.json(fallback, {
+    return NextResponse.json(buildEmptyResponse(), {
       headers: {
         "Cache-Control": "s-maxage=60, stale-while-revalidate=600",
       },
@@ -190,11 +87,11 @@ export async function GET(request: Request) {
     const response = await listPhotosPageFromDatabase(supabase, {
       cursor,
       limit,
-        year,
-        month,
-        day,
-        visibility: "family",
-      });
+      year,
+      month,
+      day,
+      visibility: "family",
+    });
 
     return NextResponse.json(response, {
       headers: {
@@ -202,12 +99,9 @@ export async function GET(request: Request) {
       },
     });
   } catch {
-    const fallback = buildStaticResponse({ cursor, limit, year, month, day });
-
-    return NextResponse.json(fallback, {
-      headers: {
-        "Cache-Control": "s-maxage=30, stale-while-revalidate=300",
-      },
-    });
+    return NextResponse.json(
+      { error: "사진 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." },
+      { status: 502 },
+    );
   }
 }
