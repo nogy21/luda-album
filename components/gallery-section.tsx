@@ -4,22 +4,27 @@ import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import type {
   CreatePhotoCommentPayload,
   PhotoCommentRow,
 } from "@/lib/gallery/comment-types";
 import { MAX_PHOTO_COMMENT_LENGTH } from "@/lib/gallery/comment-validation";
-import { getPhotoTags, groupPhotosByTag } from "@/lib/gallery/tags";
-import { formatMonthMetaLabel } from "@/lib/gallery/time";
 import type {
-  HighlightResponse,
   MonthBucketState,
   PhotoItem,
   PhotoMonthPageResponse,
   PhotoSummaryResponse,
-  YearMonthStat,
 } from "@/lib/gallery/types";
+import {
+  addFullscreenChangeListener,
+  canUseFullscreen,
+  exitFullscreen,
+  getFullscreenElement,
+  isFullscreenSupported,
+  requestFullscreen,
+} from "@/lib/ui/fullscreen";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 const PAGE_LIMIT = 24;
@@ -27,7 +32,6 @@ const INITIAL_PRELOAD_MONTHS = 2;
 
 type GallerySectionProps = {
   initialSummary: PhotoSummaryResponse;
-  initialHighlights: HighlightResponse;
   initialMonthPages: Record<string, PhotoMonthPageResponse>;
 };
 
@@ -95,11 +99,9 @@ const buildInitialMonthStateMap = (
 
 export function GallerySection({
   initialSummary,
-  initialHighlights,
   initialMonthPages,
 }: GallerySectionProps) {
   const [summary, setSummary] = useState<PhotoSummaryResponse>(initialSummary);
-  const [highlights, setHighlights] = useState<HighlightResponse>(initialHighlights);
   const [monthStateMap, setMonthStateMap] = useState<Record<string, MonthBucketState>>(() =>
     buildInitialMonthStateMap(initialSummary, initialMonthPages),
   );
@@ -108,8 +110,7 @@ export function GallerySection({
     initialSummary.months[0]?.key ?? null,
   );
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
-  const [viewMode, setViewMode] = useState<"timeline" | "tags">("timeline");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
   const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
     {},
   );
@@ -119,10 +120,12 @@ export function GallerySection({
   const [commentError, setCommentError] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const lightboxFrameRef = useRef<HTMLDivElement | null>(null);
   const monthStateMapRef = useRef<Record<string, MonthBucketState>>(monthStateMap);
   const monthSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const monthSentinelRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const inFlightMonthRef = useRef(new Set<string>());
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     monthStateMapRef.current = monthStateMap;
@@ -130,11 +133,10 @@ export function GallerySection({
 
   useEffect(() => {
     setSummary(initialSummary);
-    setHighlights(initialHighlights);
     setMonthStateMap(buildInitialMonthStateMap(initialSummary, initialMonthPages));
     setVisibleMonthKeys([]);
     setActiveMonthKey(initialSummary.months[0]?.key ?? null);
-  }, [initialSummary, initialHighlights, initialMonthPages]);
+  }, [initialSummary, initialMonthPages]);
 
   const monthSummaryMap = useMemo(
     () => new Map(summary.months.map((month) => [month.key, month])),
@@ -145,31 +147,71 @@ export function GallerySection({
     [summary.months],
   );
 
-  const loadedTimelineItems = useMemo(() => {
-    return dedupeById(
-      summary.months.flatMap((month) => monthStateMap[month.key]?.items ?? []),
-    ).sort(sortByTakenAtDesc);
-  }, [summary.months, monthStateMap]);
+  const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
+  const selectedPhotoComments = selectedImage ? commentsByPhotoId[selectedImage.id] ?? [] : [];
+  const remainingCommentChars = MAX_PHOTO_COMMENT_LENGTH - commentMessage.length;
+  const commentDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [],
+  );
 
-  const effectiveHighlights = useMemo(() => {
-    const fallbackItems = loadedTimelineItems;
-    const featured = highlights.featured.length > 0 ? highlights.featured : fallbackItems.slice(0, 2);
-    const highlightItems =
-      highlights.highlights.length > 0 ? highlights.highlights : fallbackItems.slice(2, 8);
-
-    return {
-      featured,
-      highlights: highlightItems,
+  const closeLightbox = useCallback(() => {
+    const restoreFocus = () => {
+      setLightbox(null);
+      setIsLightboxFullscreen(false);
+      window.requestAnimationFrame(() => {
+        triggerRef.current?.focus();
+      });
     };
-  }, [highlights, loadedTimelineItems]);
-  const tagAlbums = useMemo(() => groupPhotosByTag(loadedTimelineItems), [loadedTimelineItems]);
-  const activeTagItems = useMemo(() => {
-    if (!activeTag) {
-      return [];
+
+    const target = lightboxFrameRef.current;
+
+    if (target && getFullscreenElement() === target) {
+      void exitFullscreen().catch(() => {}).finally(restoreFocus);
+      return;
     }
 
-    return loadedTimelineItems.filter((item) => getPhotoTags(item).includes(activeTag));
-  }, [activeTag, loadedTimelineItems]);
+    restoreFocus();
+  }, []);
+
+  const moveLightbox = useCallback((step: number) => {
+    setLightbox((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        index: (current.index + step + current.items.length) % current.items.length,
+      };
+    });
+  }, []);
+
+  const toggleLightboxFullscreen = useCallback(() => {
+    if (!selectedImage) {
+      return;
+    }
+
+    const target = lightboxFrameRef.current;
+
+    if (!canUseFullscreen(target)) {
+      window.open(selectedImage.src, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (getFullscreenElement() === target) {
+      void exitFullscreen().catch(() => {});
+      return;
+    }
+
+    void requestFullscreen(target).catch(() => {});
+  }, [selectedImage]);
 
   const loadMonthPage = useCallback(
     async (monthKey: string) => {
@@ -309,7 +351,7 @@ export function GallerySection({
           }
         }
       },
-      { rootMargin: "260px 0px", threshold: 0.01 },
+      { rootMargin: "280px 0px", threshold: 0.01 },
     );
 
     for (const month of summary.months) {
@@ -356,7 +398,7 @@ export function GallerySection({
           return changed ? [...next] : current;
         });
       },
-      { rootMargin: "-24% 0px -58% 0px", threshold: [0, 0.2, 0.5] },
+      { rootMargin: "-18% 0px -64% 0px", threshold: [0, 0.2, 0.5] },
     );
 
     for (const month of summary.months) {
@@ -423,39 +465,47 @@ export function GallerySection({
       return;
     }
 
+    const syncFullscreenState = () => {
+      const target = lightboxFrameRef.current;
+      const activeElement = getFullscreenElement();
+      setIsLightboxFullscreen(Boolean(target && activeElement === target));
+    };
+
+    syncFullscreenState();
+
+    return addFullscreenChangeListener(syncFullscreenState);
+  }, [lightbox]);
+
+  useEffect(() => {
+    if (!lightbox) {
+      return;
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setLightbox(null);
-        window.requestAnimationFrame(() => {
-          triggerRef.current?.focus();
-        });
+        const target = lightboxFrameRef.current;
+
+        if (target && getFullscreenElement() === target) {
+          event.preventDefault();
+          void exitFullscreen().catch(() => {});
+          return;
+        }
+
+        closeLightbox();
         return;
       }
 
       if (event.key === "ArrowLeft") {
-        setLightbox((current) => {
-          if (!current) {
-            return current;
-          }
-
-          return {
-            ...current,
-            index: (current.index - 1 + current.items.length) % current.items.length,
-          };
-        });
+        moveLightbox(-1);
       }
 
       if (event.key === "ArrowRight") {
-        setLightbox((current) => {
-          if (!current) {
-            return current;
-          }
+        moveLightbox(1);
+      }
 
-          return {
-            ...current,
-            index: (current.index + 1) % current.items.length,
-          };
-        });
+      if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        toggleLightboxFullscreen();
       }
     };
 
@@ -464,38 +514,7 @@ export function GallerySection({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [lightbox]);
-
-  const openLightbox = (
-    targetItems: PhotoItem[],
-    index: number,
-    triggerElement: HTMLButtonElement,
-  ) => {
-    triggerRef.current = triggerElement;
-    setLightbox({ items: targetItems, index });
-  };
-
-  const closeLightbox = () => {
-    setLightbox(null);
-    window.requestAnimationFrame(() => {
-      triggerRef.current?.focus();
-    });
-  };
-
-  const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
-  const selectedPhotoComments = selectedImage ? commentsByPhotoId[selectedImage.id] ?? [] : [];
-  const remainingCommentChars = MAX_PHOTO_COMMENT_LENGTH - commentMessage.length;
-  const commentDateFormatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat("ko-KR", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    [],
-  );
-  const portalRoot = typeof document !== "undefined" ? document.body : null;
+  }, [lightbox, closeLightbox, moveLightbox, toggleLightboxFullscreen]);
 
   const loadPhotoComments = useCallback(async (photoId: string) => {
     setCommentStatus("loading");
@@ -586,27 +605,13 @@ export function GallerySection({
     }
   };
 
-  const selectedMonthMeta = (month: YearMonthStat): string => {
-    const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
-
-    if (!monthState.isHydrated || monthState.items.length === 0) {
-      return formatMonthMetaLabel(month.year, month.month, month.count, month.latestUpdatedAt);
-    }
-
-    const latestUpdatedAt = monthState.items.reduce((latest, item) => {
-      if (+new Date(item.updatedAt) > +new Date(latest)) {
-        return item.updatedAt;
-      }
-
-      return latest;
-    }, monthState.items[0].updatedAt);
-
-    return formatMonthMetaLabel(
-      month.year,
-      month.month,
-      monthState.items.length,
-      latestUpdatedAt,
-    );
+  const openLightbox = (
+    targetItems: PhotoItem[],
+    index: number,
+    triggerElement: HTMLButtonElement,
+  ) => {
+    triggerRef.current = triggerElement;
+    setLightbox({ items: targetItems, index });
   };
 
   if (summary.totalCount === 0) {
@@ -629,470 +634,327 @@ export function GallerySection({
     );
   }
 
-  const lightboxOverlay = selectedImage ? (
-    <div
-      className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/88 p-3 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="갤러리 이미지 크게 보기"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          closeLightbox();
-        }
-      }}
-    >
-      <div className="enter-fade-up w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black">
-        <div>
-          <Image
-            src={selectedImage.src}
-            alt={selectedImage.alt}
-            width={1100}
-            height={1300}
-            sizes="(max-width: 768px) 92vw, 760px"
-            className="max-h-[80vh] w-full object-contain"
-            priority
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2 text-white">
-          <div>
-            <p className="line-clamp-1 text-sm font-semibold text-white/95">{selectedImage.caption}</p>
-            <p className="text-[0.72rem] text-white/70">{formatDateLabel(selectedImage.takenAt)}</p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {lightbox && lightbox.items.length > 1 ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLightbox((current) => {
-                      if (!current) {
-                        return current;
-                      }
-
-                      return {
-                        ...current,
-                        index: (current.index - 1 + current.items.length) % current.items.length,
-                      };
-                    });
-                  }}
-                  className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                  aria-label="이전 사진"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLightbox((current) => {
-                      if (!current) {
-                        return current;
-                      }
-
-                      return {
-                        ...current,
-                        index: (current.index + 1) % current.items.length,
-                      };
-                    });
-                  }}
-                  className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                  aria-label="다음 사진"
-                >
-                  ›
-                </button>
-              </>
-            ) : null}
-            <button
-              type="button"
-              onClick={closeLightbox}
-              className="min-h-11 rounded-full bg-white/20 px-4 text-sm font-semibold text-white"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-        <div className="border-t border-white/10 bg-black/95 px-3 py-3 text-white">
-          <form
-            className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
-            onSubmit={handleSubmitComment}
-          >
-            <label htmlFor="photo-comment-message" className="sr-only">
-              댓글 내용
-            </label>
-            <textarea
-              id="photo-comment-message"
-              value={commentMessage}
-              onChange={(event) => {
-                setCommentMessage(event.target.value);
-                if (commentError) {
-                  setCommentError(null);
-                }
-              }}
-              placeholder="댓글을 남겨주세요"
-              className="min-h-[4.2rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2.5 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-              maxLength={MAX_PHOTO_COMMENT_LENGTH}
-            />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <label htmlFor="photo-comment-nickname" className="sr-only">
-                닉네임
-              </label>
-              <input
-                id="photo-comment-nickname"
-                type="text"
-                value={commentNickname}
-                onChange={(event) => setCommentNickname(event.target.value)}
-                placeholder="닉네임(선택)"
-                className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                maxLength={24}
-              />
-              <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
-              <button
-                type="submit"
-                disabled={commentStatus === "posting"}
-                className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
-              >
-                {commentStatus === "posting" ? "남기는 중…" : "남기기"}
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
-            <span>{selectedPhotoComments.length}개 댓글</span>
-            <span>최신순</span>
-          </div>
-
-          {commentError ? (
-            <p className="mt-1 rounded-[0.72rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
-              {commentError}
-            </p>
-          ) : null}
-
-          <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto pr-1">
-            {commentStatus === "loading" && selectedPhotoComments.length === 0 ? (
-              <p className="text-[0.74rem] text-white/70">댓글을 불러오는 중…</p>
-            ) : null}
-            {commentStatus !== "loading" && selectedPhotoComments.length === 0 ? (
-              <p className="text-[0.74rem] text-white/70">첫 댓글을 남겨주세요.</p>
-            ) : null}
-            {selectedPhotoComments.map((comment) => (
-              <article
-                key={comment.id}
-                className="rounded-[0.78rem] border border-white/10 bg-white/[0.06] px-2.5 py-2"
-              >
-                <header className="flex items-center justify-between gap-2">
-                  <strong className="text-[0.74rem] font-semibold text-white/92">{comment.nickname}</strong>
-                  <time className="text-[0.66rem] text-white/60">
-                    {commentDateFormatter.format(new Date(comment.created_at))}
-                  </time>
-                </header>
-                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/88">
-                  {comment.message}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const activeMonth =
+    (activeMonthKey ? monthSummaryMap.get(activeMonthKey) : null) ??
+    summary.months[0] ??
+    null;
+  const portalRoot = typeof document !== "undefined" ? document.body : null;
+  const supportsLightboxFullscreen = selectedImage ? isFullscreenSupported() : false;
 
   return (
     <>
-      <section
-        id="gallery"
-        className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4 sm:p-5"
-      >
-        <div className="mb-5">
+      <section id="gallery" className="scroll-mt-24 w-full">
+        <header className="mb-3">
           <h2 className="ui-title">요즘 루다는</h2>
-          <p className="mt-1.5 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
-            칩 선택 없이 스크롤로 월별 앨범을 이어서 확인해요.
+          <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">
+            총 {summary.totalCount}장의 사진을 월별로 이어서 보고 있어요.
           </p>
-        </div>
+        </header>
 
-        <section className="mb-5 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setViewMode("timeline")}
-              className={`ui-btn px-3.5 ${viewMode === "timeline" ? "ui-btn-primary" : "ui-btn-secondary"}`}
-            >
-              날짜별
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("tags")}
-              className={`ui-btn px-3.5 ${viewMode === "tags" ? "ui-btn-primary" : "ui-btn-secondary"}`}
-            >
-              이벤트별
-            </button>
+        {activeMonth ? (
+          <div className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-20 mb-3 pointer-events-none">
+            <span className="inline-flex items-center rounded-full border border-[color:var(--color-line)] bg-white/90 px-3 py-1 text-[0.72rem] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur-sm">
+              {activeMonth.year}년 {activeMonth.month}월 · 총 {activeMonth.count}장
+            </span>
           </div>
+        ) : null}
 
-          {viewMode === "tags" ? (
-            activeTag ? (
-              <>
-                <div className="mb-1 flex items-center justify-between">
-                  <p className="text-[0.86rem] font-semibold text-[color:var(--color-ink)]">#{activeTag}</p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTag(null)}
-                    className="ui-btn ui-btn-secondary px-3"
-                  >
-                    태그 목록
-                  </button>
-                </div>
-                {activeTagItems.length === 0 ? (
-                  <p className="rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/84 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]">
-                    아직 이 태그의 사진이 로드되지 않았어요. 날짜별에서 스크롤하면 자동으로 추가됩니다.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
-                    {activeTagItems.map((item, index) => (
+        <div className="space-y-4">
+          {summary.months.map((month) => {
+            const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
+            const showSkeleton =
+              monthState.isLoading && (!monthState.isHydrated || monthState.items.length === 0);
+            const showEmpty =
+              monthState.isHydrated &&
+              !monthState.isLoading &&
+              monthState.items.length === 0 &&
+              !monthState.hasError;
+            const showInitialHint =
+              !monthState.isHydrated && !monthState.isLoading && !monthState.hasError;
+
+            return (
+              <article
+                key={month.key}
+                id={`archive-${month.key}`}
+                ref={(node) => {
+                  monthSectionRefs.current[month.key] = node;
+                }}
+                data-month-key={month.key}
+                className="relative"
+              >
+                <header className="sticky top-[calc(env(safe-area-inset-top)+2.8rem)] z-10 mb-2">
+                  <div className="inline-flex flex-col rounded-full border border-[color:var(--color-line)] bg-white/94 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+                    <p className="text-[0.86rem] font-semibold leading-none text-[color:var(--color-ink)]">
+                      {month.year}년 {month.month}월
+                    </p>
+                    <p className="mt-1 text-[0.7rem] leading-none text-[color:var(--color-muted)]">
+                      총 {month.count}장
+                    </p>
+                  </div>
+                </header>
+
+                {monthState.items.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 lg:grid-cols-5">
+                    {monthState.items.map((image, index) => (
                       <button
-                        key={`tag-item-${item.id}`}
+                        key={image.id}
                         type="button"
-                        onClick={(event) => openLightbox(activeTagItems, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.82rem] bg-[color:var(--color-brand-soft)] text-left"
-                        aria-label={`${item.caption} 확대 보기`}
+                        onClick={(event) => openLightbox(monthState.items, index, event.currentTarget)}
+                        className="group relative overflow-hidden rounded-[0.72rem] bg-[color:var(--color-brand-soft)] text-left"
+                        aria-label={`${image.caption} 확대 보기`}
                       >
                         <Image
-                          src={item.thumbSrc ?? item.src}
-                          alt={item.alt}
+                          src={image.thumbSrc ?? image.src}
+                          alt={image.alt}
                           width={420}
-                          height={420}
-                          sizes="(max-width: 767px) 50vw, 280px"
+                          height={560}
+                          sizes="(max-width: 639px) 33vw, (max-width: 1023px) 25vw, 18vw"
                           className="motion-safe-scale aspect-square w-full object-cover"
                         />
                       </button>
                     ))}
                   </div>
-                )}
-              </>
-            ) : tagAlbums.length === 0 ? (
-              <p className="rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/84 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]">
-                태그 앨범을 보려면 먼저 날짜별 섹션을 스크롤해 사진을 불러와 주세요.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
-                {tagAlbums.map((album) => (
-                  <button
-                    key={`album-${album.tag}`}
-                    type="button"
-                    onClick={() => setActiveTag(album.tag)}
-                    className="overflow-hidden rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/88 text-left"
-                  >
-                    <div className="relative bg-[color:var(--color-brand-soft)]">
-                      <Image
-                        src={album.cover.thumbSrc ?? album.cover.src}
-                        alt={`${album.tag} 태그 대표 사진`}
-                        width={520}
-                        height={420}
-                        sizes="(max-width: 767px) 50vw, 280px"
-                        className="aspect-[4/3] w-full object-cover"
+                ) : null}
+
+                {showSkeleton ? (
+                  <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 lg:grid-cols-5">
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <div
+                        key={`${month.key}-skeleton-${index}`}
+                        className="aspect-square rounded-[0.72rem] bg-[color:var(--color-brand-soft)]/80"
+                        aria-hidden="true"
                       />
-                    </div>
-                    <div className="px-2.5 py-2">
-                      <p className="text-[0.82rem] font-semibold text-[color:var(--color-ink)]">#{album.tag}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )
-          ) : null}
-        </section>
-
-        {viewMode === "timeline" ? (
-          <section id="gallery-highlights" className="mb-5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">요즘 루다 포인트</h3>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-              {effectiveHighlights.featured.map((image, index) => (
-                <button
-                  key={`featured-${image.id}`}
-                  data-highlight-card
-                  type="button"
-                  onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
-                  className="group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left"
-                  aria-label={`${image.caption} 확대 보기`}
-                >
-                  <Image
-                    src={image.thumbSrc ?? image.src}
-                    alt={image.alt}
-                    width={960}
-                    height={760}
-                    sizes="(max-width: 767px) 50vw, 420px"
-                    className="motion-safe-scale aspect-[4/3] w-full object-cover"
-                    priority
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/52 to-transparent px-2.5 pb-2.5 pt-9">
-                    <p className="text-[0.76rem] font-semibold text-white/95">{image.caption}</p>
-                    <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
+                    ))}
                   </div>
-                </button>
-              ))}
-            </div>
+                ) : null}
 
-            {effectiveHighlights.highlights.length > 0 ? (
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                {effectiveHighlights.highlights.map((image, index) => (
-                  <button
-                    key={`highlight-${image.id}`}
-                    data-highlight-card
-                    type="button"
-                    onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
-                    className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left"
-                    aria-label={`${image.caption} 확대 보기`}
-                  >
-                    <Image
-                      src={image.thumbSrc ?? image.src}
-                      alt={image.alt}
-                      width={480}
-                      height={480}
-                      sizes="(max-width: 767px) 33vw, 220px"
-                      className="motion-safe-scale aspect-square w-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {viewMode === "timeline" ? (
-          <section id="monthly-archive" className="space-y-2.5">
-            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86 px-3.5 py-3">
-              <p className="text-[0.76rem] font-semibold text-[color:var(--color-brand-strong)]">전체 앨범</p>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">
-                  총 {summary.totalCount}장
-                </h3>
-                {activeMonthKey ? (
-                  <p className="text-[0.78rem] font-medium text-[color:var(--color-muted)]">
-                    현재 {monthSummaryMap.get(activeMonthKey)?.label}
+                {showInitialHint ? (
+                  <p className="mt-2 text-[0.78rem] text-[color:var(--color-muted)]">
+                    이 달 영역에 진입하면 사진을 자동으로 불러와요.
                   </p>
                 ) : null}
-              </div>
-              <p className="mt-1 text-[0.76rem] text-[color:var(--color-muted)]">
-                스크롤할 때 월 단위로 자동 로딩돼요.
-              </p>
-            </div>
 
-            {summary.months.map((month) => {
-              const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
-              const showSkeleton =
-                monthState.isLoading && (!monthState.isHydrated || monthState.items.length === 0);
-              const showEmpty =
-                monthState.isHydrated &&
-                !monthState.isLoading &&
-                monthState.items.length === 0 &&
-                !monthState.hasError;
-              const showInitialHint =
-                !monthState.isHydrated && !monthState.isLoading && !monthState.hasError;
+                {showEmpty ? (
+                  <p className="mt-2 text-[0.78rem] text-[color:var(--color-muted)]">
+                    이 달에는 사진이 아직 없어요.
+                  </p>
+                ) : null}
 
-              return (
-                <article
-                  key={month.key}
-                  id={`archive-${month.key}`}
+                {monthState.hasError ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-rose-200/90 bg-rose-50 px-3 py-2 text-[0.8rem] text-rose-700"
+                    role="alert"
+                  >
+                    <span>{monthState.hasError}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadMonthPage(month.key)}
+                      className="ui-btn ui-btn-secondary px-3"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : null}
+
+                {monthState.isHydrated && monthState.nextCursor ? (
+                  <p className="mt-2 text-[0.72rem] text-[color:var(--color-muted)]">
+                    계속 스크롤하면 이 달의 사진을 더 불러와요.
+                  </p>
+                ) : null}
+
+                <div
                   ref={(node) => {
-                    monthSectionRefs.current[month.key] = node;
+                    monthSentinelRefs.current[month.key] = node;
                   }}
                   data-month-key={month.key}
-                  className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86"
-                >
-                  <header className="px-3.5 py-3">
-                    <p className="text-[0.96rem] font-semibold text-[color:var(--color-ink)]">
-                      {month.year}년 {month.month}월
-                    </p>
-                    <p className="mt-1 text-[0.72rem] font-medium text-[color:var(--color-muted)]">
-                      총 {month.count}장 · {selectedMonthMeta(month)}
-                    </p>
-                  </header>
-
-                  {monthState.items.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-1.5 p-2 pt-0 md:grid-cols-3">
-                      {monthState.items.map((image, index) => (
-                        <button
-                          key={image.id}
-                          type="button"
-                          onClick={(event) => openLightbox(monthState.items, index, event.currentTarget)}
-                          className="group relative overflow-hidden rounded-[0.88rem] bg-[color:var(--color-brand-soft)] text-left"
-                          aria-label={`${image.caption} 확대 보기`}
-                        >
-                          <Image
-                            src={image.thumbSrc ?? image.src}
-                            alt={image.alt}
-                            width={420}
-                            height={560}
-                            sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                            className="motion-safe-scale aspect-square w-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {showSkeleton ? (
-                    <div className="grid grid-cols-2 gap-1.5 p-2 pt-0 md:grid-cols-3">
-                      {Array.from({ length: 6 }).map((_, index) => (
-                        <div
-                          key={`${month.key}-skeleton-${index}`}
-                          className="aspect-square rounded-[0.88rem] bg-[color:var(--color-brand-soft)]/70"
-                          aria-hidden="true"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {showInitialHint ? (
-                    <p className="px-3.5 pb-3 text-[0.82rem] text-[color:var(--color-muted)]">
-                      이 영역에 진입하면 사진을 불러옵니다.
-                    </p>
-                  ) : null}
-
-                  {showEmpty ? (
-                    <p className="px-3.5 pb-3 text-[0.82rem] text-[color:var(--color-muted)]">
-                      이 달에는 사진이 아직 없어요.
-                    </p>
-                  ) : null}
-
-                  {monthState.hasError ? (
-                    <div
-                      className="mx-3.5 mb-3 flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-rose-200/90 bg-rose-50 px-3 py-2 text-[0.8rem] text-rose-700"
-                      role="alert"
-                    >
-                      <span>{monthState.hasError}</span>
-                      <button
-                        type="button"
-                        onClick={() => void loadMonthPage(month.key)}
-                        className="ui-btn ui-btn-secondary px-3"
-                      >
-                        다시 시도
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {monthState.isHydrated && monthState.nextCursor ? (
-                    <p className="px-3.5 pb-2 text-[0.72rem] text-[color:var(--color-muted)]">
-                      계속 스크롤하면 이 달의 사진을 더 불러와요.
-                    </p>
-                  ) : null}
-
-                  <div
-                    ref={(node) => {
-                      monthSentinelRefs.current[month.key] = node;
-                    }}
-                    data-month-key={month.key}
-                    className="h-1 w-full"
-                    aria-hidden="true"
-                  />
-                </article>
-              );
-            })}
-          </section>
-        ) : null}
+                  className="h-1 w-full"
+                  aria-hidden="true"
+                />
+              </article>
+            );
+          })}
+        </div>
       </section>
 
-      {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}
+      {portalRoot
+        ? createPortal(
+            <AnimatePresence>
+              {selectedImage ? (
+                <motion.div
+                  key={selectedImage.id}
+                  className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/86 p-3 backdrop-blur-[2px]"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="갤러리 이미지 크게 보기"
+                  initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18, ease: "easeOut" }}
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                      closeLightbox();
+                    }
+                  }}
+                >
+                  <motion.div
+                    ref={lightboxFrameRef}
+                    className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
+                    initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8, scale: 0.985 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6, scale: 0.985 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+                  >
+                    <Image
+                      src={selectedImage.src}
+                      alt={selectedImage.alt}
+                      width={1100}
+                      height={1300}
+                      sizes="(max-width: 768px) 92vw, 760px"
+                      className="max-h-[80vh] w-full object-contain"
+                      priority
+                    />
+
+                    <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2 text-white">
+                      <div>
+                        <p className="line-clamp-1 text-sm font-semibold text-white/95">
+                          {selectedImage.caption}
+                        </p>
+                        <p className="text-[0.72rem] text-white/70">
+                          {formatDateLabel(selectedImage.takenAt)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {lightbox && lightbox.items.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => moveLightbox(-1)}
+                              className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                              aria-label="이전 사진"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveLightbox(1)}
+                              className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                              aria-label="다음 사진"
+                            >
+                              ›
+                            </button>
+                          </>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={toggleLightboxFullscreen}
+                          className="min-h-11 rounded-full bg-white/20 px-3 text-xs font-semibold text-white"
+                        >
+                          {isLightboxFullscreen
+                            ? "전체화면 종료"
+                            : supportsLightboxFullscreen
+                              ? "전체화면"
+                              : "새 탭으로 보기"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeLightbox}
+                          className="min-h-11 rounded-full bg-white/20 px-4 text-sm font-semibold text-white"
+                        >
+                          닫기
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-white/10 bg-black/95 px-3 py-3 text-white">
+                      <form
+                        className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
+                        onSubmit={handleSubmitComment}
+                      >
+                        <label htmlFor="photo-comment-message" className="sr-only">
+                          댓글 내용
+                        </label>
+                        <textarea
+                          id="photo-comment-message"
+                          value={commentMessage}
+                          onChange={(event) => {
+                            setCommentMessage(event.target.value);
+                            if (commentError) {
+                              setCommentError(null);
+                            }
+                          }}
+                          placeholder="댓글을 남겨주세요"
+                          className="min-h-[4.2rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2.5 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                          maxLength={MAX_PHOTO_COMMENT_LENGTH}
+                        />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <label htmlFor="photo-comment-nickname" className="sr-only">
+                            닉네임
+                          </label>
+                          <input
+                            id="photo-comment-nickname"
+                            type="text"
+                            value={commentNickname}
+                            onChange={(event) => setCommentNickname(event.target.value)}
+                            placeholder="닉네임(선택)"
+                            className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                            maxLength={24}
+                          />
+                          <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
+                          <button
+                            type="submit"
+                            disabled={commentStatus === "posting"}
+                            className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
+                          >
+                            {commentStatus === "posting" ? "남기는 중…" : "남기기"}
+                          </button>
+                        </div>
+                      </form>
+
+                      <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
+                        <span>{selectedPhotoComments.length}개 댓글</span>
+                        <span>최신순</span>
+                      </div>
+
+                      {commentError ? (
+                        <p className="mt-1 rounded-[0.72rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
+                          {commentError}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                        {commentStatus === "loading" && selectedPhotoComments.length === 0 ? (
+                          <p className="text-[0.74rem] text-white/70">댓글을 불러오는 중…</p>
+                        ) : null}
+                        {commentStatus !== "loading" && selectedPhotoComments.length === 0 ? (
+                          <p className="text-[0.74rem] text-white/70">첫 댓글을 남겨주세요.</p>
+                        ) : null}
+                        {selectedPhotoComments.map((comment) => (
+                          <article
+                            key={comment.id}
+                            className="rounded-[0.78rem] border border-white/10 bg-white/[0.06] px-2.5 py-2"
+                          >
+                            <header className="flex items-center justify-between gap-2">
+                              <strong className="text-[0.74rem] font-semibold text-white/92">
+                                {comment.nickname}
+                              </strong>
+                              <time className="text-[0.66rem] text-white/60">
+                                {commentDateFormatter.format(new Date(comment.created_at))}
+                              </time>
+                            </header>
+                            <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/88">
+                              {comment.message}
+                            </p>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            portalRoot,
+          )
+        : null}
     </>
   );
 }

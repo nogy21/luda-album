@@ -81,8 +81,8 @@ export function LandingHero({ items }: LandingHeroProps) {
   return (
     <section
       ref={rootRef}
-      className="mx-auto mt-2 w-full max-w-[860px] px-4 sm:mt-3 sm:px-6"
-      aria-label="오늘의 루다 하이라이트"
+      className="layout-container mt-2 sm:mt-3"
+      aria-label="루다 하이라이트"
     >
       <article className="ui-surface overflow-hidden rounded-[var(--radius-xl)] p-3.5 sm:p-4">
         <p className="ui-eyebrow" data-landing-intro="meta">
@@ -93,7 +93,7 @@ export function LandingHero({ items }: LandingHeroProps) {
           data-landing-intro="title"
           className="mt-1.5 max-w-[18ch] text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
         >
-          오늘의 루다 하이라이트
+          루다 하이라이트
         </h1>
 
         <div

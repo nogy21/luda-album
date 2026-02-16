@@ -51,6 +51,8 @@
   --weight-bold: 700;
   --tap-min: 44px;
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-brand) 28%, transparent);
+  --layout-max-width: 960px;
+  --layout-padding-inline: 1rem;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-nav-height: 4.58rem;
   --bottom-nav-edge-offset: max(0.56rem, var(--safe-area-bottom));
@@ -364,6 +366,13 @@ body {
   font: inherit;
 }
 
+.layout-container {
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin-inline: auto;
+  padding-inline: var(--layout-padding-inline);
+}
+
 .page-bottom-safe {
   padding-bottom: var(--page-bottom-content-padding);
 }
@@ -406,6 +415,22 @@ body {
 
 .enter-delay-2 {
   animation-delay: 160ms;
+}
+
+.route-transition-layer {
+  will-change: opacity, transform;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --layout-padding-inline: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --layout-padding-inline: 1.5rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -191,58 +191,60 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
         }
       }}
     >
-      <section
-        ref={sheetRef}
-        className="mx-auto w-full max-w-[860px] overflow-hidden rounded-[1.2rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-ink)] shadow-[var(--shadow-float)]"
-        role="dialog"
-        aria-modal="true"
-        aria-label="새 사진 알림"
-        onMouseDown={(event) => {
-          event.stopPropagation();
-        }}
-      >
-        <div className="px-5 pt-3">
-          <div
-            className="mx-auto h-1 w-11 rounded-full bg-[color:color-mix(in_srgb,var(--color-line)_82%,#fff_18%)]"
-            aria-hidden="true"
-          />
-        </div>
-
-        <header className="px-5 pb-2 pt-3">
-          <div className="mb-2 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.07em] text-[color:var(--color-muted)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand)]" aria-hidden="true" />
-            <span>새 사진 알림</span>
+      <div className="layout-container">
+        <section
+          ref={sheetRef}
+          className="w-full overflow-hidden rounded-[1.2rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-ink)] shadow-[var(--shadow-float)]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="새 사진 알림"
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <div className="px-5 pt-3">
+            <div
+              className="mx-auto h-1 w-11 rounded-full bg-[color:color-mix(in_srgb,var(--color-line)_82%,#fff_18%)]"
+              aria-hidden="true"
+            />
           </div>
-          <h2 className="text-[1.11rem] font-semibold leading-[1.32] tracking-[-0.012em]">
-            루다의 새 사진이 올라왔어요
-          </h2>
-        </header>
 
-        <div className="space-y-3 px-5 pb-5 pt-1">
-          <p className="text-[0.88rem] leading-[1.55] text-[color:var(--color-muted)]">
-            바로 확인하거나, 잠시 뒤 다시 알려드릴게요.
-          </p>
-          <button
-            type="button"
-            onClick={handleGo}
-            className="ui-btn ui-btn-primary min-h-12 w-full rounded-[0.98rem] px-4 text-[0.9rem]"
-          >
-            사진 보러 가기
-          </button>
-          <button
-            type="button"
-            onClick={handleLater}
-            className="ui-btn ui-btn-secondary min-h-11 w-full rounded-[0.98rem] px-4 text-[0.86rem]"
-          >
-            나중에
-          </button>
+          <header className="px-5 pb-2 pt-3">
+            <div className="mb-2 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.07em] text-[color:var(--color-muted)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand)]" aria-hidden="true" />
+              <span>새 사진 알림</span>
+            </div>
+            <h2 className="text-[1.11rem] font-semibold leading-[1.32] tracking-[-0.012em]">
+              루다의 새 사진이 올라왔어요
+            </h2>
+          </header>
 
-          <p className="flex items-center gap-1.5 text-[0.72rem] leading-[1.45] text-[color:var(--color-muted)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-pink)]" aria-hidden="true" />
-            나중에를 누르면 24시간 뒤에 다시 알려드려요.
-          </p>
-        </div>
-      </section>
+          <div className="space-y-3 px-5 pb-5 pt-1">
+            <p className="text-[0.88rem] leading-[1.55] text-[color:var(--color-muted)]">
+              바로 확인하거나, 잠시 뒤 다시 알려드릴게요.
+            </p>
+            <button
+              type="button"
+              onClick={handleGo}
+              className="ui-btn ui-btn-primary min-h-12 w-full rounded-[0.98rem] px-4 text-[0.9rem]"
+            >
+              사진 보러 가기
+            </button>
+            <button
+              type="button"
+              onClick={handleLater}
+              className="ui-btn ui-btn-secondary min-h-11 w-full rounded-[0.98rem] px-4 text-[0.86rem]"
+            >
+              나중에
+            </button>
+
+            <p className="flex items-center gap-1.5 text-[0.72rem] leading-[1.45] text-[color:var(--color-muted)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-pink)]" aria-hidden="true" />
+              나중에를 누르면 24시간 뒤에 다시 알려드려요.
+            </p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

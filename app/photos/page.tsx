@@ -1,15 +1,11 @@
-import { AppShell, CoverCard } from "@/components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { GallerySection } from "@/components/gallery-section";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
-import { PushNotificationPanel } from "@/components/push-notification-panel";
 import {
-  listPhotoHighlightsFromDatabase,
   listPhotoSummaryFromDatabase,
   listPhotosMonthPageFromDatabase,
-  mapPhotoItemToGalleryImage,
 } from "@/lib/gallery/repository";
 import type {
-  HighlightResponse,
   PhotoItem,
   PhotoMonthPageResponse,
   PhotoSummaryResponse,
@@ -30,30 +26,16 @@ const buildEmptySummary = (): PhotoSummaryResponse => ({
   months: [],
 });
 
-const buildEmptyHighlights = (): HighlightResponse => ({
-  featured: [],
-  highlights: [],
-});
-
 export default async function PhotosPage() {
   const supabase = createServerSupabaseClient();
   let initialSummary = buildEmptySummary();
-  let initialHighlights = buildEmptyHighlights();
   let initialMonthPages: Record<string, PhotoMonthPageResponse> = {};
 
   if (supabase) {
     try {
-      const [summary, highlightData] = await Promise.all([
-        listPhotoSummaryFromDatabase(supabase, { visibility: "family" }),
-        listPhotoHighlightsFromDatabase(supabase, {
-          featuredLimit: 2,
-          highlightLimit: 6,
-          visibility: "family",
-        }),
-      ]);
+      const summary = await listPhotoSummaryFromDatabase(supabase, { visibility: "family" });
 
       initialSummary = summary;
-      initialHighlights = highlightData;
 
       const monthPages = await Promise.all(
         summary.months
@@ -84,11 +66,8 @@ export default async function PhotosPage() {
 
   return (
     <AppShell>
-      <CoverCard images={coverItems.map(mapPhotoItemToGalleryImage)} />
-      <PushNotificationPanel />
       <GallerySection
         initialSummary={initialSummary}
-        initialHighlights={initialHighlights}
         initialMonthPages={initialMonthPages}
       />
       <NewPhotoBottomSheet

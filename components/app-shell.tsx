@@ -28,12 +28,12 @@ export function AppShell({ children }: AppShellProps) {
       </a>
       <main
         id="main-content"
-        className="mx-auto w-full max-w-[780px] px-3.5 pt-[max(0.4rem,env(safe-area-inset-top))] sm:px-5 sm:pt-3"
+        className="layout-container pt-[max(0.4rem,env(safe-area-inset-top))] sm:pt-3"
       >
         {children}
       </main>
 
-      <FixedBottomNav maxWidth={780} />
+      <FixedBottomNav />
     </div>
   );
 }

@@ -3,10 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type FixedBottomNavProps = {
-  maxWidth: number;
-};
-
 const tabs = [
   { href: "/", label: "홈" },
   { href: "/photos", label: "앨범" },
@@ -21,37 +17,36 @@ const isActivePath = (pathname: string, href: string) => {
   return pathname === href || pathname.startsWith(`${href}/`);
 };
 
-export function FixedBottomNav({ maxWidth }: FixedBottomNavProps) {
+export function FixedBottomNav() {
   const pathname = usePathname();
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[var(--z-bottom-nav)] px-3.5 pt-1 sm:px-5"
+      className="fixed inset-x-0 bottom-0 z-[var(--z-bottom-nav)] pt-1"
       style={{ paddingBottom: "var(--bottom-nav-edge-offset)" }}
       aria-label="하단 메뉴"
     >
-      <div
-        className="ui-bottom-nav-shell mx-auto grid min-h-[var(--bottom-nav-height)] grid-cols-3 items-stretch gap-1 rounded-[1.08rem] p-1 text-[0.88rem]"
-        style={{ maxWidth }}
-      >
-        {tabs.map((tab) => {
-          const active = isActivePath(pathname, tab.href);
+      <div className="layout-container">
+        <div className="ui-bottom-nav-shell grid min-h-[var(--bottom-nav-height)] grid-cols-3 items-stretch gap-1 rounded-[1.08rem] p-1 text-[0.88rem]">
+          {tabs.map((tab) => {
+            const active = isActivePath(pathname, tab.href);
 
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="ui-bottom-nav-tab px-2.5 py-2 text-center"
-              data-active={active ? "true" : "false"}
-              aria-current={active ? "page" : undefined}
-            >
-              <span>{tab.label}</span>
-              {active ? (
-                <span aria-hidden="true" className="ui-bottom-nav-tab-indicator" />
-              ) : null}
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className="ui-bottom-nav-tab px-2.5 py-2 text-center"
+                data-active={active ? "true" : "false"}
+                aria-current={active ? "page" : undefined}
+              >
+                <span>{tab.label}</span>
+                {active ? (
+                  <span aria-hidden="true" className="ui-bottom-nav-tab-indicator" />
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
