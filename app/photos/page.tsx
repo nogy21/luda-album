@@ -134,16 +134,9 @@ export default async function PhotosPage({ searchParams }: { searchParams?: Prom
     }
   }
 
-  const heroImages = [
-    ...initialHighlights.featured,
-    ...initialHighlights.highlights,
-  ].map(mapPhotoItemToGalleryImage);
-
   return (
     <AppShell>
-      <CoverCard
-        images={heroImages.length > 0 ? heroImages : initialData.items.map(mapPhotoItemToGalleryImage)}
-      />
+      <CoverCard images={initialData.items.map(mapPhotoItemToGalleryImage)} />
       <GallerySection
         initialData={initialData}
         initialHighlights={initialHighlights}

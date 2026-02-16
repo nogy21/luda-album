@@ -124,6 +124,9 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     return groups.slice(0, 2).map((group) => group.key);
   });
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [activeMonthKey, setActiveMonthKey] = useState<string | null>(
+    initialData.summary.yearMonthStats[0]?.key ?? null,
+  );
   const [pendingJumpKey, setPendingJumpKey] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [viewMode, setViewMode] = useState<"timeline" | "tags">("timeline");
@@ -149,6 +152,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     const groups = buildMonthGroups(initialData.items);
     setOpenMonthKeys(groups.slice(0, 2).map((group) => group.key));
     setSelectedYear(groups[0]?.year ?? null);
+    setActiveMonthKey(initialData.summary.yearMonthStats[0]?.key ?? null);
   }, [initialData, initialHighlights]);
 
   useEffect(() => {
@@ -201,6 +205,17 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
 
     return summary.yearMonthStats.filter((stat) => stat.year === selectedYear);
   }, [selectedYear, summary.yearMonthStats]);
+
+  useEffect(() => {
+    if (visibleMonthStats.length === 0) {
+      setActiveMonthKey(null);
+      return;
+    }
+
+    if (!activeMonthKey || !visibleMonthStats.some((stat) => stat.key === activeMonthKey)) {
+      setActiveMonthKey(visibleMonthStats[0]?.key ?? null);
+    }
+  }, [activeMonthKey, visibleMonthStats]);
 
   const effectiveHighlights = useMemo(() => {
     const featured = highlights.featured.length > 0 ? highlights.featured : items.slice(0, 2);
@@ -517,6 +532,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
   };
 
   const jumpToMonth = (monthKey: string) => {
+    setActiveMonthKey(monthKey);
     const target = document.getElementById(`archive-${monthKey}`);
 
     if (!target) {
@@ -536,6 +552,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     const firstMonth = summary.yearMonthStats.find((stat) => stat.year === year);
 
     if (firstMonth) {
+      setActiveMonthKey(firstMonth.key);
       jumpToMonth(firstMonth.key);
     }
   };
@@ -648,40 +665,57 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
           </div>
         </div>
         <div className="border-t border-white/10 bg-black/95 px-3 py-3 text-white">
-          <form className="space-y-2" onSubmit={handleSubmitComment}>
-            <div className="flex flex-wrap items-center gap-2">
+          <form
+            className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
+            onSubmit={handleSubmitComment}
+          >
+            <label htmlFor="photo-comment-message" className="sr-only">
+              댓글 내용
+            </label>
+            <textarea
+              id="photo-comment-message"
+              value={commentMessage}
+              onChange={(event) => {
+                setCommentMessage(event.target.value);
+                if (commentError) {
+                  setCommentError(null);
+                }
+              }}
+              placeholder="댓글을 남겨주세요"
+              className="min-h-[4.2rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2.5 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+              maxLength={MAX_PHOTO_COMMENT_LENGTH}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label htmlFor="photo-comment-nickname" className="sr-only">
+                닉네임
+              </label>
               <input
+                id="photo-comment-nickname"
                 type="text"
                 value={commentNickname}
                 onChange={(event) => setCommentNickname(event.target.value)}
-                placeholder="닉네임"
-                className="min-h-11 w-[7rem] rounded-full border border-white/20 bg-white/10 px-3 text-[0.78rem] text-white placeholder:text-white/60"
+                placeholder="닉네임(선택)"
+                className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                 maxLength={24}
               />
-              <input
-                type="text"
-                value={commentMessage}
-                onChange={(event) => setCommentMessage(event.target.value)}
-                placeholder="이 사진에 댓글 남기기"
-                className="min-h-11 flex-1 rounded-full border border-white/20 bg-white/10 px-3 text-[0.82rem] text-white placeholder:text-white/60"
-                maxLength={MAX_PHOTO_COMMENT_LENGTH}
-              />
+              <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
               <button
                 type="submit"
                 disabled={commentStatus === "posting"}
-                className="min-h-11 rounded-full bg-white/20 px-3.5 text-[0.78rem] font-semibold text-white disabled:opacity-60"
+                className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
               >
-                {commentStatus === "posting" ? "등록 중…" : "댓글 등록"}
+                {commentStatus === "posting" ? "남기는 중…" : "남기기"}
               </button>
-            </div>
-            <div className="flex items-center justify-between text-[0.68rem] text-white/70">
-              <span>{selectedPhotoComments.length}개 댓글</span>
-              <span>{remainingCommentChars}자 남음</span>
             </div>
           </form>
 
+          <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
+            <span>{selectedPhotoComments.length}개 댓글</span>
+            <span>최신순</span>
+          </div>
+
           {commentError ? (
-            <p className="mt-1 rounded-[0.7rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
+            <p className="mt-1 rounded-[0.72rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
               {commentError}
             </p>
           ) : null}
@@ -696,7 +730,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             {selectedPhotoComments.map((comment) => (
               <article
                 key={comment.id}
-                className="rounded-[0.75rem] border border-white/12 bg-white/8 px-2.5 py-2"
+                className="rounded-[0.78rem] border border-white/10 bg-white/[0.06] px-2.5 py-2"
               >
                 <header className="flex items-center justify-between gap-2">
                   <strong className="text-[0.74rem] font-semibold text-white/92">{comment.nickname}</strong>
@@ -704,7 +738,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     {commentDateFormatter.format(new Date(comment.created_at))}
                   </time>
                 </header>
-                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/90">
+                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/88">
                   {comment.message}
                 </p>
               </article>
@@ -722,9 +756,9 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4 sm:p-5"
       >
         <div className="mb-5">
-          <h2 className="ui-title">루다의 새 순간</h2>
+          <h2 className="ui-title">요즘 루다는</h2>
           <p className="mt-1.5 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
-            대표컷부터 월별 아카이브까지 한 번에 감상해요.
+            날짜별, 이벤트별로 지금의 순간을 골라보세요.
           </p>
         </div>
 
@@ -735,14 +769,14 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
               onClick={() => setViewMode("timeline")}
               className={`ui-btn px-3.5 ${viewMode === "timeline" ? "ui-btn-primary" : "ui-btn-secondary"}`}
             >
-              월별 보기
+              날짜별
             </button>
             <button
               type="button"
               onClick={() => setViewMode("tags")}
               className={`ui-btn px-3.5 ${viewMode === "tags" ? "ui-btn-primary" : "ui-btn-secondary"}`}
             >
-              태그 모아보기
+              이벤트별
             </button>
           </div>
 
@@ -812,7 +846,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         {viewMode === "timeline" ? (
         <section id="gallery-highlights" className="mb-5 space-y-2.5">
           <div className="flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">이번 주 대표컷</h3>
+            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">요즘 루다 포인트</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
@@ -885,15 +919,22 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
             ))}
           </div>
 
-          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleMonthStats.map((group) => (
               <button
                 key={`${group.key}-jump`}
                 type="button"
                 onClick={() => jumpToMonth(group.key)}
-                className="ui-btn ui-btn-secondary shrink-0 px-3"
+                aria-label={`${group.year}년 ${group.month}월 사진 ${group.count}장`}
+                className={`shrink-0 rounded-full border px-3.5 py-2 text-left text-[0.78rem] font-semibold transition-colors ${
+                  activeMonthKey === group.key
+                    ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-ink)]"
+                    : "border-[color:var(--color-line)] bg-white/88 text-[color:var(--color-muted)] hover:border-[color:var(--color-brand)]/40 hover:text-[color:var(--color-ink)]"
+                }`}
+                aria-pressed={activeMonthKey === group.key}
               >
-                {group.month}월
+                <span>{group.month}월</span>
+                <span className="ml-1.5 text-[0.68rem] font-medium opacity-75">{group.count}장</span>
               </button>
             ))}
           </div>

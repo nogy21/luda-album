@@ -1,20 +1,20 @@
 "use client";
 
-import gsap from "gsap";
 import Image from "next/image";
-import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { FixedBottomNav } from "@/components/fixed-bottom-nav";
-import {
-  getInitialFeaturedImages,
-  getShuffledFeaturedImages,
-} from "@/lib/gallery/featured";
+import { getRandomDateItems } from "@/lib/gallery/featured";
 import { type GalleryImage, galleryImages } from "@/lib/gallery/images";
-import { markHeroIntroSeen, shouldRunHeroIntro } from "@/lib/ui/hero-intro";
+import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 type AppShellProps = {
   children: ReactNode;
+};
+
+const formatDateLabel = (takenAt: string) => {
+  const date = new Date(takenAt);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
 export function AppShell({ children }: AppShellProps) {
@@ -43,178 +43,222 @@ type CoverCardProps = {
 };
 
 export function CoverCard({ images = galleryImages }: CoverCardProps) {
-  const [featuredImages, setFeaturedImages] = useState(() => getInitialFeaturedImages(images, 8));
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const heroRef = useRef<HTMLElement | null>(null);
-  const latestDateLabel = useMemo(() => {
-    const sorted = [...images].sort(
-      (left, right) => +new Date(right.takenAt) - +new Date(left.takenAt),
-    );
-    const latest = sorted[0];
-
-    if (!latest) {
-      return "-";
-    }
-
-    const date = new Date(latest.takenAt);
-    return `${date.getMonth() + 1}월 ${date.getDate()}일`;
-  }, [images]);
-  const tileClasses = useMemo(
-    () => [
-      "col-span-4 row-span-4",
-      "col-span-2 row-span-2",
-      "col-span-2 row-span-2",
-      "col-span-2 row-span-2",
-      "col-span-2 row-span-2",
-      "col-span-3 row-span-2",
-      "col-span-3 row-span-2",
-      "col-span-2 row-span-2",
-      "col-span-2 row-span-2",
-    ],
-    [],
+  const [shuffleSeed, setShuffleSeed] = useState(() => Math.random());
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const previewImages = useMemo(
+    () => getRandomDateItems(images, 3, () => shuffleSeed),
+    [images, shuffleSeed],
   );
 
+  const selectedImage = lightboxIndex !== null ? previewImages[lightboxIndex] ?? null : null;
+  const previewDateLabel = useMemo(() => {
+    if (!previewImages[0]) {
+      return "";
+    }
+
+    return formatDateLabel(previewImages[0].takenAt);
+  }, [previewImages]);
+
   useEffect(() => {
-    setFeaturedImages(getInitialFeaturedImages(images, 8));
-  }, [images]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || reduceMotion) {
+    if (!selectedImage) {
       return;
     }
 
-    if (!shouldRunHeroIntro(window.sessionStorage)) {
-      return;
-    }
-
-    const hero = heroRef.current;
-
-    if (!hero) {
-      return;
-    }
-
-    const targets = hero.querySelectorAll<HTMLElement>("[data-hero-intro]");
-
-    if (targets.length === 0) {
-      return;
-    }
-
-    const context = gsap.context(() => {
-      gsap.fromTo(
-        targets,
-        { opacity: 0, y: 14 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.44,
-          ease: "power2.out",
-          stagger: 0.07,
-        },
-      );
-    }, hero);
-
-    markHeroIntroSeen(window.sessionStorage);
+    const snapshot = lockPageScroll();
 
     return () => {
-      context.revert();
+      unlockPageScroll(snapshot);
     };
-  }, [reduceMotion]);
+  }, [selectedImage]);
+
+  useEffect(() => {
+    if (!selectedImage) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLightboxIndex(null);
+        window.requestAnimationFrame(() => {
+          triggerRef.current?.focus();
+        });
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        setLightboxIndex((current) => {
+          if (current === null) {
+            return current;
+          }
+
+          return (current - 1 + previewImages.length) % previewImages.length;
+        });
+      }
+
+      if (event.key === "ArrowRight") {
+        setLightboxIndex((current) => {
+          if (current === null) {
+            return current;
+          }
+
+          return (current + 1) % previewImages.length;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewImages.length, selectedImage]);
 
   const handleShuffle = () => {
-    setFeaturedImages(getShuffledFeaturedImages(images, 8));
+    setShuffleSeed(Math.random());
+    setLightboxIndex(null);
   };
 
+  if (previewImages.length === 0) {
+    return null;
+  }
+
   return (
-    <section
-      ref={heroRef}
-      className="ui-surface mb-[var(--space-section-md)] overflow-hidden rounded-[var(--radius-xl)] p-4 sm:p-5"
-    >
-      <div className="mb-4 ui-stack-sm" data-hero-intro="meta">
-        <p className="ui-eyebrow">Luda Album</p>
-        <p className="text-[var(--text-meta)] font-medium text-[color:var(--color-muted)]">
-          최근 기록 · {latestDateLabel}
-        </p>
-      </div>
+    <section className="ui-surface mb-[var(--space-section-sm)] overflow-hidden rounded-[var(--radius-xl)] p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="ui-eyebrow">Album Preview</p>
+          <h1 className="mt-1 text-[length:var(--text-hero-title)] font-bold leading-[1.25] tracking-[-0.02em] text-[color:var(--color-ink)]">
+            랜덤 데이 미리보기
+          </h1>
+          <p className="mt-1 text-[0.76rem] font-medium text-[color:var(--color-muted)]">{previewDateLabel}</p>
+        </div>
 
-      <h1
-        className="max-w-[18ch] text-[length:var(--text-display)] font-bold leading-[var(--leading-tight)] tracking-[-0.02em] text-[color:var(--color-ink)]"
-        data-hero-intro="title"
-      >
-        오늘의 루다 순간
-      </h1>
-      <p
-        className="mt-2 max-w-[30ch] text-[var(--text-body)] leading-[var(--leading-body)] text-[color:var(--color-muted)]"
-        data-hero-intro="description"
-      >
-        가장 최근 표정을 먼저 보고, 월별 아카이브로 천천히 이어서 감상해요.
-      </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2.5" data-hero-intro="cta">
-        <Link href="#monthly-archive" className="ui-btn ui-btn-primary px-4">
-          오늘 사진부터 보기
-        </Link>
         <button
           type="button"
           onClick={handleShuffle}
-          aria-label="대표 사진 다시 섞기"
-          className="ui-btn-text px-2.5"
+          aria-label="랜덤 날짜 사진 다시 고르기"
+          className="ui-btn ui-btn-secondary px-3"
         >
-          대표 사진 바꾸기
+          섞기
         </button>
       </div>
-      <p
-        className="mt-1.5 text-[0.78rem] leading-[1.45] text-[color:var(--color-muted)]"
-        data-hero-intro="cta-note"
-      >
-        아카이브에서 월별로 이어서 보실 수 있어요.
-      </p>
 
-      <div className="mt-4 grid grid-cols-6 auto-rows-[74px] gap-1.5 sm:auto-rows-[88px]" data-hero-intro="gallery">
-        {featuredImages.map((image, index) => (
-          <article
+      <div className={`grid gap-1.5 ${previewImages.length === 1 ? "grid-cols-1" : "grid-cols-3"}`}>
+        {previewImages.map((image, index) => (
+          <button
             key={image.id}
-            data-hero-tile
-            className={`group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left ${
-              tileClasses[index] ?? "col-span-2 row-span-1"
-            }`}
+            type="button"
+            onClick={(event) => {
+              triggerRef.current = event.currentTarget;
+              setLightboxIndex(index);
+            }}
+            className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left"
+            aria-label={`${image.caption} 확대 보기`}
           >
             <Image
-              src={image.src}
+              src={image.thumbSrc ?? image.src}
               alt={image.alt}
-              fill
-              priority={index < 3}
-              sizes={index === 0 ? "(max-width: 640px) 66vw, 420px" : "(max-width: 640px) 36vw, 260px"}
-              className="motion-safe-scale object-cover object-center"
+              width={1000}
+              height={1000}
+              priority={index === 0}
+              sizes={previewImages.length === 1 ? "(max-width: 780px) 92vw, 700px" : "(max-width: 640px) 31vw, 220px"}
+              className={`motion-safe-scale w-full object-cover ${previewImages.length === 1 ? "aspect-[5/4]" : "aspect-square"}`}
             />
-            {index < 2 ? (
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 to-transparent px-2.5 pb-2 pt-8 text-[0.72rem] font-semibold text-white/95">
-                {image.caption}
-              </span>
-            ) : null}
-          </article>
+            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/58 to-transparent px-2.5 pb-2 pt-8 text-[0.72rem] font-semibold text-white/95">
+              {image.caption}
+            </span>
+          </button>
         ))}
       </div>
 
-      <Link
-        href="#gallery-highlights"
-        className="ui-subtle-surface mt-4 flex items-center justify-between rounded-[0.95rem] px-3 py-2.5 text-left"
-        data-hero-intro="next-preview"
-      >
-        <span>
-          <span className="block text-[0.7rem] font-semibold text-[color:var(--color-brand-strong)]">
-            다음 섹션
-          </span>
-          <span className="block text-[0.84rem] font-medium text-[color:var(--color-ink)]">
-            대표컷과 하이라이트 이어 보기
-          </span>
-        </span>
-        <span aria-hidden="true" className="text-base text-[color:var(--color-muted)]">
-          ↓
-        </span>
-      </Link>
+      {selectedImage ? (
+        <div
+          className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/88 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label="랜덤 데이 사진"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setLightboxIndex(null);
+              window.requestAnimationFrame(() => {
+                triggerRef.current?.focus();
+              });
+            }
+          }}
+        >
+          <div className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black">
+            <Image
+              src={selectedImage.src}
+              alt={selectedImage.alt}
+              width={1200}
+              height={1300}
+              sizes="(max-width: 768px) 92vw, 760px"
+              className="max-h-[80vh] w-full object-contain"
+              priority
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2.5">
+              <div>
+                <p className="text-[0.88rem] font-semibold text-white/95">{selectedImage.caption}</p>
+                <p className="text-[0.72rem] text-white/72">{formatDateLabel(selectedImage.takenAt)}</p>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {previewImages.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLightboxIndex((current) => {
+                          if (current === null) {
+                            return current;
+                          }
+
+                          return (current - 1 + previewImages.length) % previewImages.length;
+                        });
+                      }}
+                      className="ui-btn border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
+                      aria-label="이전 사진"
+                    >
+                      이전
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLightboxIndex((current) => {
+                          if (current === null) {
+                            return current;
+                          }
+
+                          return (current + 1) % previewImages.length;
+                        });
+                      }}
+                      className="ui-btn border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
+                      aria-label="다음 사진"
+                    >
+                      다음
+                    </button>
+                  </>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLightboxIndex(null);
+                    window.requestAnimationFrame(() => {
+                      triggerRef.current?.focus();
+                    });
+                  }}
+                  className="ui-btn border-white/26 bg-white/10 px-4 text-white hover:bg-white/16"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
