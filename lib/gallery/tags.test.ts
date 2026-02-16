@@ -9,6 +9,7 @@ const createPhoto = (id: string, caption: string, tags?: string[]): PhotoItem =>
   thumbSrc: null,
   alt: id,
   caption,
+  eventNames: tags ?? [],
   takenAt: "2026-02-14T10:00:00.000Z",
   updatedAt: "2026-02-14T10:00:00.000Z",
   visibility: "family",

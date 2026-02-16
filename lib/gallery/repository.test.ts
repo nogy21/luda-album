@@ -2,11 +2,14 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   createGalleryImageRecord,
+  deleteGalleryPhotoRecord,
+  listAdminPhotosPageFromDatabase,
   listGalleryImagesFromDatabase,
   listPhotoHighlightsFromDatabase,
   listPhotoSummaryFromDatabase,
   listPhotosMonthPageFromDatabase,
   listPhotosPageFromDatabase,
+  updateGalleryPhotoMetadata,
 } from "./repository";
 
 type QueryResult<T> = {
@@ -18,11 +21,13 @@ type MockQueryBuilder = PromiseLike<QueryResult<unknown>> & {
   select: ReturnType<typeof vi.fn>;
   order: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   gte: ReturnType<typeof vi.fn>;
   lt: ReturnType<typeof vi.fn>;
   limit: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   single: ReturnType<typeof vi.fn>;
 };
 
@@ -31,11 +36,13 @@ const createBuilder = <T>(result: QueryResult<T>): MockQueryBuilder => {
     select: vi.fn(),
     order: vi.fn(),
     eq: vi.fn(),
+    in: vi.fn(),
     gte: vi.fn(),
     lt: vi.fn(),
     limit: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     single: vi.fn(),
     then: (
       onFulfilled?: (value: QueryResult<unknown>) => unknown,
@@ -48,11 +55,13 @@ const createBuilder = <T>(result: QueryResult<T>): MockQueryBuilder => {
   builder.select.mockReturnValue(builder);
   builder.order.mockReturnValue(builder);
   builder.eq.mockReturnValue(builder);
+  builder.in.mockReturnValue(builder);
   builder.gte.mockReturnValue(builder);
   builder.lt.mockReturnValue(builder);
   builder.limit.mockReturnValue(builder);
   builder.insert.mockReturnValue(builder);
   builder.update.mockReturnValue(builder);
+  builder.delete.mockReturnValue(builder);
   builder.single.mockResolvedValue(result);
 
   return builder;
@@ -402,6 +411,7 @@ describe("gallery repository", () => {
         src: "https://example.com/upload.jpg",
         thumb_src: "https://example.com/upload-thumb.jpg",
         storage_path: "2026/02/14/uuid-luda-moment.jpg",
+        month_key: "2026-02",
         visibility: "family",
       }),
     );
@@ -410,6 +420,271 @@ describe("gallery repository", () => {
       src: "https://example.com/upload.jpg",
       thumbSrc: "https://example.com/upload-thumb.jpg",
       visibility: "family",
+    });
+  });
+
+  test("createGalleryImageRecord throws when required columns are missing", async () => {
+    const modernInsertBuilder = createBuilder({
+      data: null,
+      error: {
+        message: "Could not find the 'alt' column of 'gallery_photos' in the schema cache",
+      },
+    });
+    const from = vi.fn(() => modernInsertBuilder);
+
+    await expect(
+      createGalleryImageRecord(
+        { from },
+        {
+          src: "https://example.com/upload.jpg",
+          thumbSrc: "https://example.com/upload-thumb.jpg",
+          storagePath: "2026/02/14/uuid-luda-moment.jpg",
+          originalName: "luda-moment.jpg",
+          type: "image/jpeg",
+          size: 1234,
+          takenAt: "2026-02-12T10:00:00.000Z",
+        },
+        "gallery_photos",
+      ),
+    ).rejects.toThrow("Failed to create gallery image record");
+  });
+
+  test("listAdminPhotosPageFromDatabase returns page with cursor", async () => {
+    const rows = [
+      {
+        id: "2",
+        src: "https://example.com/2.jpg",
+        thumb_src: "https://example.com/thumb-2.jpg",
+        alt: "둘째 사진",
+        caption: "둘째",
+        taken_at: "2026-02-11T10:00:00.000Z",
+        updated_at: "2026-02-11T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+      {
+        id: "1",
+        src: "https://example.com/1.jpg",
+        thumb_src: null,
+        alt: "첫째 사진",
+        caption: "첫째",
+        taken_at: "2026-02-10T10:00:00.000Z",
+        updated_at: "2026-02-10T10:00:00.000Z",
+        visibility: "admin",
+        is_featured: true,
+        featured_rank: 1,
+      },
+    ];
+
+    const builder = createBuilder({ data: rows, error: null });
+    const from = vi.fn(() => builder);
+
+    const result = await listAdminPhotosPageFromDatabase(
+      { from },
+      {
+        limit: 1,
+      },
+      "gallery_photos",
+    );
+
+    expect(builder.limit).toHaveBeenCalledWith(2);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "2",
+      caption: "둘째",
+      visibility: "family",
+    });
+    expect(result.nextCursor).toBe("2026-02-11T10:00:00.000Z|2");
+  });
+
+  test("listAdminPhotosPageFromDatabase includes mapped eventNames", async () => {
+    const rows = [
+      {
+        id: "2",
+        src: "https://example.com/2.jpg",
+        thumb_src: "https://example.com/thumb-2.jpg",
+        alt: "둘째 사진",
+        caption: "둘째",
+        taken_at: "2026-02-11T10:00:00.000Z",
+        updated_at: "2026-02-11T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+    ];
+    const pageBuilder = createBuilder({ data: rows, error: null });
+    const relationBuilder = createBuilder({
+      data: [{ photo_id: "2", event_id: "event-a" }],
+      error: null,
+    });
+    const eventBuilder = createBuilder({
+      data: [{ id: "event-a", name: "여행", normalized_name: "여행" }],
+      error: null,
+    });
+    const from = vi.fn((table: string) => {
+      if (table === "gallery_photos") {
+        return pageBuilder;
+      }
+
+      if (table === "gallery_photo_events") {
+        return relationBuilder;
+      }
+
+      if (table === "gallery_events") {
+        return eventBuilder;
+      }
+
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const result = await listAdminPhotosPageFromDatabase(
+      { from },
+      {
+        limit: 10,
+      },
+      "gallery_photos",
+    );
+
+    expect(result.items[0]?.eventNames).toEqual(["여행"]);
+  });
+
+  test("updateGalleryPhotoMetadata updates caption and takenAt with derived alt", async () => {
+    const updatedRow = {
+      id: "photo-1",
+      src: "https://example.com/1.jpg",
+      thumb_src: null,
+      alt: "업데이트 캡션 사진",
+      caption: "업데이트 캡션",
+      taken_at: "2026-02-16T09:00:00.000Z",
+      updated_at: "2026-02-16T09:30:00.000Z",
+      visibility: "family",
+      is_featured: false,
+      featured_rank: null,
+    };
+    const builder = createBuilder({ data: updatedRow, error: null });
+    const from = vi.fn(() => builder);
+
+    const result = await updateGalleryPhotoMetadata(
+      { from },
+      {
+        photoId: "photo-1",
+        caption: "업데이트 캡션",
+        takenAt: "2026-02-16T09:00:00.000Z",
+      },
+      "gallery_photos",
+    );
+
+    expect(builder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        caption: "업데이트 캡션",
+        alt: "업데이트 캡션 사진",
+        taken_at: "2026-02-16T09:00:00.000Z",
+        month_key: "2026-02",
+      }),
+    );
+    expect(result.caption).toBe("업데이트 캡션");
+    expect(result.takenAt).toBe("2026-02-16T09:00:00.000Z");
+  });
+
+  test("updateGalleryPhotoMetadata rejects too long caption", async () => {
+    const from = vi.fn();
+
+    await expect(
+      updateGalleryPhotoMetadata(
+        { from },
+        {
+          photoId: "photo-1",
+          caption: "가".repeat(121),
+        },
+        "gallery_photos",
+      ),
+    ).rejects.toThrow("caption은 120자 이하여야 해요.");
+  });
+
+  test("updateGalleryPhotoMetadata replaces event names", async () => {
+    const updatedRow = {
+      id: "photo-1",
+      src: "https://example.com/1.jpg",
+      thumb_src: null,
+      alt: "업데이트 캡션 사진",
+      caption: "업데이트 캡션",
+      taken_at: "2026-02-16T09:00:00.000Z",
+      updated_at: "2026-02-16T09:30:00.000Z",
+      visibility: "family",
+      is_featured: false,
+      featured_rank: null,
+    };
+    const photoBuilder = createBuilder({ data: updatedRow, error: null });
+    const relationBuilder = {
+      delete: vi.fn(() => ({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      })),
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    const eventsBuilder = {
+      upsert: vi.fn(() => ({
+        select: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })),
+      select: vi.fn(() => ({
+        in: vi.fn().mockResolvedValue({
+          data: [
+            { id: "event-a", name: "여행", normalized_name: "여행" },
+            { id: "event-b", name: "돌잔치", normalized_name: "돌잔치" },
+          ],
+          error: null,
+        }),
+      })),
+    };
+    const from = vi.fn((table: string) => {
+      if (table === "gallery_photos") {
+        return photoBuilder;
+      }
+
+      if (table === "gallery_photo_events") {
+        return relationBuilder;
+      }
+
+      if (table === "gallery_events") {
+        return eventsBuilder;
+      }
+
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const result = await updateGalleryPhotoMetadata(
+      { from },
+      {
+        photoId: "photo-1",
+        eventNames: ["여행", "돌잔치"],
+      },
+      "gallery_photos",
+    );
+
+    expect(result.eventNames).toEqual(["여행", "돌잔치"]);
+  });
+
+  test("deleteGalleryPhotoRecord deletes row and returns storage path", async () => {
+    const deletedRow = {
+      id: "photo-1",
+      storage_path: "2026/02/14/photo-1.jpg",
+      taken_at: "2026-02-14T10:00:00.000Z",
+      created_at: "2026-02-14T10:00:00.000Z",
+    };
+    const builder = createBuilder({ data: deletedRow, error: null });
+    const from = vi.fn(() => builder);
+
+    const result = await deleteGalleryPhotoRecord(
+      { from },
+      { photoId: "photo-1" },
+      "gallery_photos",
+    );
+
+    expect(builder.delete).toHaveBeenCalledTimes(1);
+    expect(builder.eq).toHaveBeenCalledWith("id", "photo-1");
+    expect(result).toEqual({
+      id: "photo-1",
+      storagePath: "2026/02/14/photo-1.jpg",
     });
   });
 });

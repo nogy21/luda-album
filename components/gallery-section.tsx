@@ -17,6 +17,7 @@ import type {
   PhotoMonthPageResponse,
   PhotoSummaryResponse,
 } from "@/lib/gallery/types";
+import { getPhotoTags } from "@/lib/gallery/tags";
 import {
   addFullscreenChangeListener,
   canUseFullscreen,
@@ -109,6 +110,7 @@ export function GallerySection({
   const [activeMonthKey, setActiveMonthKey] = useState<string | null>(
     initialSummary.months[0]?.key ?? null,
   );
+  const [activeEventName, setActiveEventName] = useState("전체");
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
   const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
@@ -136,6 +138,7 @@ export function GallerySection({
     setMonthStateMap(buildInitialMonthStateMap(initialSummary, initialMonthPages));
     setVisibleMonthKeys([]);
     setActiveMonthKey(initialSummary.months[0]?.key ?? null);
+    setActiveEventName("전체");
   }, [initialSummary, initialMonthPages]);
 
   const monthSummaryMap = useMemo(
@@ -146,6 +149,37 @@ export function GallerySection({
     () => new Map(summary.months.map((month, index) => [month.key, index])),
     [summary.months],
   );
+  const eventStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    const uniqueItems = dedupeById(
+      Object.values(monthStateMap).flatMap((state) => state.items),
+    );
+
+    for (const item of uniqueItems) {
+      for (const eventName of getPhotoTags(item)) {
+        counts.set(eventName, (counts.get(eventName) ?? 0) + 1);
+      }
+    }
+
+    return [...counts.entries()].sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+
+      return left[0].localeCompare(right[0], "ko");
+    });
+  }, [monthStateMap]);
+
+  useEffect(() => {
+    if (activeEventName === "전체") {
+      return;
+    }
+
+    const available = new Set(eventStats.map(([eventName]) => eventName));
+    if (!available.has(activeEventName)) {
+      setActiveEventName("전체");
+    }
+  }, [activeEventName, eventStats]);
 
   const selectedImage = lightbox ? lightbox.items[lightbox.index] : null;
   const selectedPhotoComments = selectedImage ? commentsByPhotoId[selectedImage.id] ?? [] : [];
@@ -649,12 +683,41 @@ export function GallerySection({
           <p className="mt-1 text-[0.82rem] text-[color:var(--color-muted)]">
             총 {summary.totalCount}장의 사진을 월별로 이어서 보고 있어요.
           </p>
+          <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setActiveEventName("전체")}
+              className={`min-h-9 whitespace-nowrap rounded-full border px-3 text-[0.72rem] font-semibold ${
+                activeEventName === "전체"
+                  ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                  : "border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+              }`}
+            >
+              전체
+            </button>
+            {eventStats.map(([eventName, count]) => (
+              <button
+                key={eventName}
+                type="button"
+                onClick={() => setActiveEventName(eventName)}
+                className={`min-h-9 whitespace-nowrap rounded-full border px-3 text-[0.72rem] font-semibold ${
+                  activeEventName === eventName
+                    ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
+                    : "border-[color:var(--color-line)] bg-white text-[color:var(--color-muted)]"
+                }`}
+              >
+                {eventName} · {count}
+              </button>
+            ))}
+          </div>
         </header>
 
         {activeMonth ? (
           <div className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-20 mb-3 pointer-events-none">
             <span className="inline-flex items-center rounded-full border border-[color:var(--color-line)] bg-white/90 px-3 py-1 text-[0.72rem] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur-sm">
-              {activeMonth.year}년 {activeMonth.month}월 · 총 {activeMonth.count}장
+              {activeMonth.year}년 {activeMonth.month}월 ·{" "}
+              {activeEventName === "전체" ? "총" : `${activeEventName} 이벤트`}{" "}
+              {activeMonth.count}장
             </span>
           </div>
         ) : null}
@@ -662,12 +725,16 @@ export function GallerySection({
         <div className="space-y-4">
           {summary.months.map((month) => {
             const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
+            const filteredItems =
+              activeEventName === "전체"
+                ? monthState.items
+                : monthState.items.filter((image) => getPhotoTags(image).includes(activeEventName));
             const showSkeleton =
               monthState.isLoading && (!monthState.isHydrated || monthState.items.length === 0);
             const showEmpty =
               monthState.isHydrated &&
               !monthState.isLoading &&
-              monthState.items.length === 0 &&
+              filteredItems.length === 0 &&
               !monthState.hasError;
             const showInitialHint =
               !monthState.isHydrated && !monthState.isLoading && !monthState.hasError;
@@ -693,13 +760,13 @@ export function GallerySection({
                   </div>
                 </header>
 
-                {monthState.items.length > 0 ? (
+                {filteredItems.length > 0 ? (
                   <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 lg:grid-cols-5">
-                    {monthState.items.map((image, index) => (
+                    {filteredItems.map((image, index) => (
                       <button
                         key={image.id}
                         type="button"
-                        onClick={(event) => openLightbox(monthState.items, index, event.currentTarget)}
+                        onClick={(event) => openLightbox(filteredItems, index, event.currentTarget)}
                         className="group relative overflow-hidden rounded-[0.72rem] bg-[color:var(--color-brand-soft)] text-left"
                         aria-label={`${image.caption} 확대 보기`}
                       >
@@ -736,7 +803,9 @@ export function GallerySection({
 
                 {showEmpty ? (
                   <p className="mt-2 text-[0.78rem] text-[color:var(--color-muted)]">
-                    이 달에는 사진이 아직 없어요.
+                    {activeEventName === "전체"
+                      ? "이 달에는 사진이 아직 없어요."
+                      : `${activeEventName} 이벤트 사진이 이 달에는 없어요.`}
                   </p>
                 ) : null}
 
@@ -821,6 +890,9 @@ export function GallerySection({
                         </p>
                         <p className="text-[0.72rem] text-white/70">
                           {formatDateLabel(selectedImage.takenAt)}
+                        </p>
+                        <p className="text-[0.68rem] text-white/60">
+                          {getPhotoTags(selectedImage).join(", ")}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5">

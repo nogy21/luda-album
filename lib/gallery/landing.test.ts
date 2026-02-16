@@ -9,6 +9,7 @@ const createPhoto = (id: string, takenAt: string): PhotoItem => ({
   thumbSrc: null,
   alt: id,
   caption: id,
+  eventNames: [],
   takenAt,
   updatedAt: takenAt,
   visibility: "family",

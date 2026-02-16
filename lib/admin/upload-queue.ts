@@ -1,8 +1,21 @@
+import {
+  normalizeCaptionFromOriginalName,
+  parseTakenAtFromFileName,
+} from "@/lib/gallery/upload-metadata";
+
 export type UploadItemStatus = "queued" | "uploading" | "success" | "error";
 
 export type UploadQueueItem = {
   id: string;
   file: File;
+  previewUrl?: string;
+  caption: string;
+  takenAtInput: string;
+  eventNames: string[];
+  locationLabel?: string | null;
+  metadataLoading?: boolean;
+  captionTouched?: boolean;
+  takenAtTouched?: boolean;
   status: UploadItemStatus;
   progress: number;
   uploadedPath?: string;
@@ -28,14 +41,38 @@ const clampProgress = (value: number) => {
   return value;
 };
 
+export const toDateTimeLocalInputValue = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const pad = (value: number) => `${value}`.padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export const createUploadQueue = (
   files: File[],
   visibility: "family" | "admin" = "family",
 ): UploadQueueItem[] => {
   const timestamp = Date.now();
+  const toDefaultTakenAt = (file: File) => {
+    if (Number.isFinite(file.lastModified) && file.lastModified > 0) {
+      return new Date(file.lastModified).toISOString();
+    }
+
+    return parseTakenAtFromFileName(file.name) ?? new Date().toISOString();
+  };
 
   return files.map((file, index) => ({
     id: `${timestamp}-${index}-${file.name}-${file.size}`,
+    caption: normalizeCaptionFromOriginalName(file.name),
+    takenAtInput: toDateTimeLocalInputValue(toDefaultTakenAt(file)),
+    eventNames: [],
+    locationLabel: null,
+    metadataLoading: true,
+    captionTouched: false,
+    takenAtTouched: false,
     file,
     visibility,
     status: "queued",

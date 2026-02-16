@@ -1,5 +1,9 @@
 import type { GalleryImage } from "./images";
 import {
+  listEventNamesByPhotoIds,
+  replacePhotoEvents,
+} from "./events-repository";
+import {
   formatMonthMetaLabel,
   formatRelativeDaysFromNow,
   formatYearMonthLabel,
@@ -54,6 +58,7 @@ type QueryChain = {
   limit: (count: number) => QueryChain;
   insert: (values: Record<string, unknown>) => QueryChain;
   update: (values: Record<string, unknown>) => QueryChain;
+  delete: () => QueryChain;
   single: () => QueryPromise<unknown>;
 };
 
@@ -91,6 +96,12 @@ export type ListPhotosMonthPageOptions = {
   visibility?: PhotoVisibility;
 };
 
+export type ListAdminPhotosPageOptions = {
+  cursor?: string;
+  limit?: number;
+  visibility?: PhotoVisibility;
+};
+
 export type CreateGalleryImageRecordInput = {
   src: string;
   thumbSrc?: string | null;
@@ -105,6 +116,7 @@ export type CreateGalleryImageRecordInput = {
   visibility?: PhotoVisibility;
   isFeatured?: boolean;
   featuredRank?: number | null;
+  eventNames?: string[];
 };
 
 export type UpdateGalleryFeaturedInput = {
@@ -113,13 +125,25 @@ export type UpdateGalleryFeaturedInput = {
   featuredRank?: number | null;
 };
 
+export type UpdateGalleryMetadataInput = {
+  photoId: string;
+  caption?: string;
+  takenAt?: string;
+  isFeatured?: boolean;
+  featuredRank?: number | null;
+  eventNames?: string[];
+};
+
+export type DeleteGalleryPhotoRecordInput = {
+  photoId: string;
+};
+
 const GALLERY_SELECT_COLUMNS =
   "id, src, thumb_src, alt, caption, taken_at, updated_at, visibility, is_featured, featured_rank";
-const LEGACY_GALLERY_SELECT_COLUMNS = "id, storage_path, taken_at, created_at";
 const SUMMARY_SELECT_COLUMNS = "id, taken_at, updated_at";
-const LEGACY_SUMMARY_SELECT_COLUMNS = "id, taken_at, created_at";
 const DEFAULT_PAGE_LIMIT = 36;
 const MAX_PAGE_LIMIT = 96;
+const MAX_CAPTION_LENGTH = 120;
 const DEFAULT_VISIBILITY: PhotoVisibility = "family";
 const DEFAULT_STORAGE_BUCKET = "luda-photos";
 
@@ -140,12 +164,22 @@ const getFileNameFromPath = (path: string) => {
   return segments[segments.length - 1] ?? normalized;
 };
 
+const toMonthKey = (isoString: string) => {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+};
+
 const buildStoragePublicUrl = (storagePath?: string | null) => {
   if (!storagePath) {
     return null;
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   if (!supabaseUrl) {
     return null;
@@ -158,14 +192,6 @@ const buildStoragePublicUrl = (storagePath?: string | null) => {
     .join("/");
 
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${encodedPath}`;
-};
-
-const isMissingColumnError = (error: QueryError) => {
-  if (!error?.message) {
-    return false;
-  }
-
-  return /column .* does not exist/i.test(error.message);
 };
 
 const clampLimit = (limit?: number) => {
@@ -212,8 +238,12 @@ const encodeCursor = (row: Pick<GalleryPhotoRow, "taken_at" | "id">): string => 
   return `${row.taken_at}|${row.id}`;
 };
 
-const mapRowToPhotoItem = (row: GalleryPhotoRow): PhotoItem => {
-  const resolvedSrc = row.src ?? buildStoragePublicUrl(row.storage_path) ?? "";
+const mapRowToPhotoItem = (
+  row: GalleryPhotoRow,
+  eventNames: string[] = [],
+): PhotoItem => {
+  const srcFromColumn = typeof row.src === "string" ? row.src.trim() : "";
+  const resolvedSrc = srcFromColumn || buildStoragePublicUrl(row.storage_path) || "";
   const captionSource = row.caption
     ? row.caption
     : formatCaptionFromFileName(getFileNameFromPath(row.storage_path ?? row.id));
@@ -225,6 +255,7 @@ const mapRowToPhotoItem = (row: GalleryPhotoRow): PhotoItem => {
     thumbSrc: row.thumb_src === undefined ? (resolvedSrc || null) : row.thumb_src,
     alt: altSource,
     caption: captionSource,
+    eventNames,
     takenAt: row.taken_at,
     updatedAt: row.updated_at ?? row.created_at ?? row.taken_at,
     visibility: normalizeVisibility(row.visibility),
@@ -234,13 +265,15 @@ const mapRowToPhotoItem = (row: GalleryPhotoRow): PhotoItem => {
 };
 
 export const mapPhotoItemToGalleryImage = (item: PhotoItem): GalleryImage => {
+  const tags = item.tags ?? (item.eventNames.length > 0 ? item.eventNames : undefined);
+
   return {
     id: item.id,
     src: item.src,
     thumbSrc: item.thumbSrc,
     alt: item.alt,
     caption: item.caption,
-    tags: item.tags,
+    ...(tags ? { tags } : {}),
     takenAt: item.takenAt,
     updatedAt: item.updatedAt,
     visibility: item.visibility,
@@ -256,6 +289,7 @@ export const mapGalleryImageToPhotoItem = (item: GalleryImage): PhotoItem => {
     thumbSrc: item.thumbSrc ?? null,
     alt: item.alt,
     caption: item.caption,
+    eventNames: item.tags ?? [],
     tags: item.tags,
     takenAt: item.takenAt,
     updatedAt: item.updatedAt ?? item.takenAt,
@@ -263,6 +297,28 @@ export const mapGalleryImageToPhotoItem = (item: GalleryImage): PhotoItem => {
     isFeatured: item.isFeatured ?? false,
     featuredRank: item.featuredRank ?? null,
   };
+};
+
+const mapRowsToPhotoItems = async (
+  supabase: RepositoryClient,
+  rows: GalleryPhotoRow[],
+) => {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  let eventNamesByPhotoId = new Map<string, string[]>();
+
+  try {
+    eventNamesByPhotoId = await listEventNamesByPhotoIds(
+      supabase,
+      rows.map((row) => row.id),
+    );
+  } catch {
+    // Keep photo listing resilient even if event relation query fails.
+  }
+
+  return rows.map((row) => mapRowToPhotoItem(row, eventNamesByPhotoId.get(row.id) ?? []));
 };
 
 const applyDateRangeFilter = (
@@ -395,32 +451,18 @@ export const listPhotoSummaryFromDatabase = async (
   tableName = getGalleryPhotosTableName(),
 ): Promise<PhotoSummaryResponse> => {
   const { year, month, day, visibility } = options;
+  let query = supabase
+    .from(tableName) as QueryChain;
 
-  const runSummaryQuery = async (legacy: boolean) => {
-    let query = supabase
-      .from(tableName) as QueryChain;
+  query = query
+    .select(SUMMARY_SELECT_COLUMNS)
+    .order("taken_at", { ascending: false })
+    .eq("visibility", getQueryVisibility(visibility));
 
-    query = query
-      .select(legacy ? LEGACY_SUMMARY_SELECT_COLUMNS : SUMMARY_SELECT_COLUMNS)
-      .order("taken_at", { ascending: false });
+  query = applyDateRangeFilter(query, year, month, day);
 
-    if (!legacy) {
-      query = query.eq("visibility", getQueryVisibility(visibility));
-    }
-
-    query = applyDateRangeFilter(query, year, month, day);
-
-    return (await (query as unknown as QueryPromise<GalleryPhotoSummaryRow[]>)) as {
-      data: GalleryPhotoSummaryRow[] | null;
-      error: { message: string } | null;
-    };
-  };
-
-  let { data, error } = await runSummaryQuery(false);
-
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await runSummaryQuery(true));
-  }
+  const { data, error }: { data: GalleryPhotoSummaryRow[] | null; error: { message: string } | null } =
+    await (query as unknown as QueryPromise<GalleryPhotoSummaryRow[]>);
 
   if (error) {
     throw new Error(`Failed to load photo summary: ${error.message}`);
@@ -442,35 +484,21 @@ export const listGalleryImagesFromDatabase = async (
   supabase: RepositoryClient,
   tableName = getGalleryPhotosTableName(),
 ): Promise<GalleryImage[]> => {
-  const runListQuery = async (legacy: boolean) => {
-    let query = supabase
-      .from(tableName) as QueryChain;
-
-    query = query
-      .select(legacy ? LEGACY_GALLERY_SELECT_COLUMNS : GALLERY_SELECT_COLUMNS)
-      .order("taken_at", { ascending: false });
-
-    if (!legacy) {
-      query = query.eq("visibility", DEFAULT_VISIBILITY);
-    }
-
-    return (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
-      data: GalleryPhotoRow[] | null;
-      error: { message: string } | null;
-    };
-  };
-
-  let { data, error } = await runListQuery(false);
-
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await runListQuery(true));
-  }
+  const query = ((supabase
+    .from(tableName) as QueryChain)
+    .select(GALLERY_SELECT_COLUMNS)
+    .eq("visibility", DEFAULT_VISIBILITY)
+    .order("taken_at", { ascending: false })) as unknown as QueryPromise<GalleryPhotoRow[]>;
+  const { data, error }: { data: GalleryPhotoRow[] | null; error: { message: string } | null } =
+    await query;
 
   if (error) {
     throw new Error(`Failed to list gallery images: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => mapPhotoItemToGalleryImage(mapRowToPhotoItem(row)));
+  const items = await mapRowsToPhotoItems(supabase, data ?? []);
+
+  return items.map((item) => mapPhotoItemToGalleryImage(item));
 };
 
 export const listPhotosPageFromDatabase = async (
@@ -481,38 +509,22 @@ export const listPhotosPageFromDatabase = async (
   const limit = clampLimit(options.limit);
   const queryLimit = limit + 1;
   const cursorTakenAt = parseCursor(options.cursor);
+  let query = (supabase
+    .from(tableName) as QueryChain)
+    .select(GALLERY_SELECT_COLUMNS)
+    .order("taken_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(queryLimit)
+    .eq("visibility", getQueryVisibility(options.visibility));
 
-  const runPageQuery = async (legacy: boolean) => {
-    let query = supabase
-      .from(tableName) as QueryChain;
-
-    query = query
-      .select(legacy ? LEGACY_GALLERY_SELECT_COLUMNS : GALLERY_SELECT_COLUMNS)
-      .order("taken_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(queryLimit);
-
-    if (!legacy) {
-      query = query.eq("visibility", getQueryVisibility(options.visibility));
-    }
-
-    if (cursorTakenAt) {
-      query = query.lt("taken_at", cursorTakenAt);
-    }
-
-    query = applyDateRangeFilter(query, options.year, options.month, options.day);
-
-    return (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
-      data: GalleryPhotoRow[] | null;
-      error: { message: string } | null;
-    };
-  };
-
-  let { data, error } = await runPageQuery(false);
-
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await runPageQuery(true));
+  if (cursorTakenAt) {
+    query = query.lt("taken_at", cursorTakenAt);
   }
+
+  query = applyDateRangeFilter(query, options.year, options.month, options.day);
+
+  const { data, error }: { data: GalleryPhotoRow[] | null; error: { message: string } | null } =
+    await (query as unknown as QueryPromise<GalleryPhotoRow[]>);
 
   if (error) {
     throw new Error(`Failed to list photos page: ${error.message}`);
@@ -521,7 +533,6 @@ export const listPhotosPageFromDatabase = async (
   const rows = data ?? [];
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const items = pageRows.map(mapRowToPhotoItem);
 
   const summary = await listPhotoSummaryFromDatabase(supabase, {
     year: options.year,
@@ -529,6 +540,7 @@ export const listPhotosPageFromDatabase = async (
     day: options.day,
     visibility: options.visibility,
   }, tableName);
+  const items = await mapRowsToPhotoItems(supabase, pageRows);
 
   return {
     items,
@@ -558,40 +570,22 @@ export const listPhotosMonthPageFromDatabase = async (
   const queryLimit = limit + 1;
   const cursorTakenAt = parseCursor(options.cursor);
   const { fromDate, toDate } = getMonthDateRange(options.year, options.month);
+  let query = (supabase
+    .from(tableName) as QueryChain)
+    .select(GALLERY_SELECT_COLUMNS)
+    .order("taken_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(queryLimit)
+    .eq("visibility", getQueryVisibility(options.visibility))
+    .gte("taken_at", fromDate)
+    .lt("taken_at", toDate);
 
-  const runMonthQuery = async (legacy: boolean) => {
-    let query = supabase
-      .from(tableName) as QueryChain;
-
-    query = query
-      .select(legacy ? LEGACY_GALLERY_SELECT_COLUMNS : GALLERY_SELECT_COLUMNS)
-      .order("taken_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(queryLimit);
-
-    if (!legacy) {
-      query = query.eq("visibility", getQueryVisibility(options.visibility));
-    }
-
-    query = query
-      .gte("taken_at", fromDate)
-      .lt("taken_at", toDate);
-
-    if (cursorTakenAt) {
-      query = query.lt("taken_at", cursorTakenAt);
-    }
-
-    return (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
-      data: GalleryPhotoRow[] | null;
-      error: { message: string } | null;
-    };
-  };
-
-  let { data, error } = await runMonthQuery(false);
-
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await runMonthQuery(true));
+  if (cursorTakenAt) {
+    query = query.lt("taken_at", cursorTakenAt);
   }
+
+  const { data, error }: { data: GalleryPhotoRow[] | null; error: { message: string } | null } =
+    await (query as unknown as QueryPromise<GalleryPhotoRow[]>);
 
   if (error) {
     throw new Error(`Failed to list monthly photos page: ${error.message}`);
@@ -605,7 +599,7 @@ export const listPhotosMonthPageFromDatabase = async (
     year: options.year,
     month: options.month,
     key: `${options.year}-${String(options.month).padStart(2, "0")}`,
-    items: pageRows.map(mapRowToPhotoItem),
+    items: await mapRowsToPhotoItems(supabase, pageRows),
     nextCursor: hasMore && pageRows.length > 0 ? encodeCursor(pageRows[pageRows.length - 1]) : null,
   };
 };
@@ -653,50 +647,8 @@ export const listPhotoHighlightsFromDatabase = async (
   const visibility = getQueryVisibility(options.visibility);
 
   const latestLimit = Math.max(highlightLimit, featuredLimit) + featuredLimit + 8;
-
-  const runLatestQuery = async (legacy: boolean) => {
-    let query = supabase
-      .from(tableName) as QueryChain;
-
-    query = query
-      .select(legacy ? LEGACY_GALLERY_SELECT_COLUMNS : GALLERY_SELECT_COLUMNS)
-      .order("taken_at", { ascending: false })
-      .limit(latestLimit);
-
-    if (!legacy) {
-      query = query.eq("visibility", visibility);
-    }
-
-    return (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
-      data: GalleryPhotoRow[] | null;
-      error: { message: string } | null;
-    };
-  };
-
-  const buildLegacyHighlights = async () => {
-    const { data, error } = await runLatestQuery(true);
-
-    if (error) {
-      throw new Error(`Failed to list latest photos: ${error.message}`);
-    }
-
-    const latestItems = (data ?? []).map(mapRowToPhotoItem);
-    const featured = latestItems.slice(0, featuredLimit);
-    const featuredIds = new Set(featured.map((item) => item.id));
-    const highlights = latestItems
-      .filter((item) => !featuredIds.has(item.id))
-      .slice(0, highlightLimit);
-
-    return {
-      featured,
-      highlights,
-    };
-  };
-
-  const featuredQuery = supabase
-    .from(tableName) as QueryChain;
-
-  const featuredSelectQuery = featuredQuery
+  const featuredSelectQuery = (supabase
+    .from(tableName) as QueryChain)
     .select(GALLERY_SELECT_COLUMNS)
     .eq("visibility", visibility)
     .eq("is_featured", true)
@@ -710,26 +662,47 @@ export const listPhotoHighlightsFromDatabase = async (
   }: { data: GalleryPhotoRow[] | null; error: { message: string } | null } = await (featuredSelectQuery as unknown as QueryPromise<GalleryPhotoRow[]>);
 
   if (featuredError) {
-    if (isMissingColumnError(featuredError)) {
-      return buildLegacyHighlights();
-    }
-
     throw new Error(`Failed to list featured photos: ${featuredError.message}`);
   }
 
-  const { data: latestData, error: latestError } = await runLatestQuery(false);
-
-  if (latestError && isMissingColumnError(latestError)) {
-    return buildLegacyHighlights();
-  }
+  const latestQuery = ((supabase
+    .from(tableName) as QueryChain)
+    .select(GALLERY_SELECT_COLUMNS)
+    .eq("visibility", visibility)
+    .order("taken_at", { ascending: false })
+    .limit(latestLimit)) as unknown as QueryPromise<GalleryPhotoRow[]>;
+  const { data: latestData, error: latestError } = await latestQuery;
 
   if (latestError) {
     throw new Error(`Failed to list latest photos: ${latestError.message}`);
   }
 
-  const latestItems = (latestData ?? []).map(mapRowToPhotoItem);
+  const featuredRows = featuredData ?? [];
+  const latestRows = latestData ?? [];
+  const allRows = [...featuredRows, ...latestRows];
+  let eventNamesByPhotoId = new Map<string, string[]>();
+
+  if (allRows.length > 0) {
+    try {
+      eventNamesByPhotoId = await listEventNamesByPhotoIds(
+        supabase,
+        allRows.map((row) => row.id),
+      );
+    } catch {
+      // Ignore event join failures for highlights to keep feed available.
+    }
+  }
+
+  const latestItems = latestRows.map((row) =>
+    mapRowToPhotoItem(row, eventNamesByPhotoId.get(row.id) ?? []),
+  );
   const featured = getFallbackFeatured(
-    [...(featuredData ?? []).map(mapRowToPhotoItem), ...latestItems],
+    [
+      ...featuredRows.map((row) =>
+        mapRowToPhotoItem(row, eventNamesByPhotoId.get(row.id) ?? []),
+      ),
+      ...latestItems,
+    ],
     featuredLimit,
   );
   const featuredIds = new Set(featured.map((item) => item.id));
@@ -751,6 +724,7 @@ export const createGalleryImageRecord = async (
   const takenAt = input.takenAt ?? new Date().toISOString();
   const updatedAt = input.updatedAt ?? takenAt;
   const visibility = input.visibility ?? DEFAULT_VISIBILITY;
+  const monthKey = toMonthKey(takenAt);
 
   const { data, error }: { data: GalleryPhotoRow | null; error: { message: string } | null } =
     await ((supabase
@@ -765,6 +739,7 @@ export const createGalleryImageRecord = async (
         caption,
         alt,
         taken_at: takenAt,
+        month_key: monthKey,
         updated_at: updatedAt,
         visibility,
         is_featured: input.isFeatured ?? false,
@@ -774,45 +749,6 @@ export const createGalleryImageRecord = async (
       .single() as QueryPromise<GalleryPhotoRow>);
 
   if (error) {
-    if (isMissingColumnError(error)) {
-      const monthDate = new Date(takenAt);
-      const monthKey = `${monthDate.getUTCFullYear()}-${String(monthDate.getUTCMonth() + 1).padStart(2, "0")}`;
-      const fallbackQuery = (supabase
-        .from(tableName) as QueryChain)
-        .insert({
-          storage_path: input.storagePath,
-          taken_at: takenAt,
-          month_key: monthKey,
-        })
-        .select("id, storage_path, taken_at, created_at, month_key")
-        .single() as QueryPromise<GalleryPhotoRow>;
-      const {
-        data: fallbackData,
-        error: fallbackError,
-      }: { data: GalleryPhotoRow | null; error: { message: string } | null } = await fallbackQuery;
-
-      if (fallbackError) {
-        throw new Error(`Failed to create gallery image record: ${fallbackError.message}`);
-      }
-
-      if (!fallbackData) {
-        throw new Error("Failed to create gallery image record: no data returned");
-      }
-
-      return {
-        id: fallbackData.id,
-        src: input.src,
-        thumbSrc: input.thumbSrc ?? input.src,
-        alt,
-        caption,
-        takenAt,
-        updatedAt,
-        visibility,
-        isFeatured: input.isFeatured ?? false,
-        featuredRank: input.featuredRank ?? null,
-      };
-    }
-
     throw new Error(`Failed to create gallery image record: ${error.message}`);
   }
 
@@ -820,7 +756,12 @@ export const createGalleryImageRecord = async (
     throw new Error("Failed to create gallery image record: no data returned");
   }
 
-  return mapRowToPhotoItem(data);
+  const eventNames =
+    input.eventNames !== undefined
+      ? await replacePhotoEvents(supabase, data.id, input.eventNames)
+      : [];
+
+  return mapRowToPhotoItem(data, eventNames);
 };
 
 export const updateGalleryPhotoFeatured = async (
@@ -828,29 +769,156 @@ export const updateGalleryPhotoFeatured = async (
   input: UpdateGalleryFeaturedInput,
   tableName = getGalleryPhotosTableName(),
 ): Promise<PhotoItem> => {
+  return updateGalleryPhotoMetadata(
+    supabase,
+    {
+      photoId: input.photoId,
+      isFeatured: input.isFeatured,
+      featuredRank: input.featuredRank ?? null,
+    },
+    tableName,
+  );
+};
+
+export const listAdminPhotosPageFromDatabase = async (
+  supabase: RepositoryClient,
+  options: ListAdminPhotosPageOptions = {},
+  tableName = getGalleryPhotosTableName(),
+) => {
+  const limit = clampLimit(options.limit);
+  const queryLimit = limit + 1;
+  const cursorTakenAt = parseCursor(options.cursor);
+  let query = (supabase
+    .from(tableName) as QueryChain)
+    .select(GALLERY_SELECT_COLUMNS)
+    .order("taken_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(queryLimit);
+
+  if (options.visibility) {
+    query = query.eq("visibility", options.visibility);
+  }
+
+  if (cursorTakenAt) {
+    query = query.lt("taken_at", cursorTakenAt);
+  }
+
+  const { data, error }: { data: GalleryPhotoRow[] | null; error: { message: string } | null } =
+    await (query as unknown as QueryPromise<GalleryPhotoRow[]>);
+
+  if (error) {
+    throw new Error(`Failed to list admin photos page: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  return {
+    items: await mapRowsToPhotoItems(supabase, pageRows),
+    nextCursor: hasMore && pageRows.length > 0 ? encodeCursor(pageRows[pageRows.length - 1]) : null,
+  };
+};
+
+export const updateGalleryPhotoMetadata = async (
+  supabase: RepositoryClient,
+  input: UpdateGalleryMetadataInput,
+  tableName = getGalleryPhotosTableName(),
+): Promise<PhotoItem> => {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  const hasEventNamesUpdate = input.eventNames !== undefined;
+
+  if (input.caption !== undefined) {
+    const trimmed = input.caption.trim();
+    if (!trimmed) {
+      throw new Error("caption은 비워둘 수 없어요.");
+    }
+    if (trimmed.length > MAX_CAPTION_LENGTH) {
+      throw new Error(`caption은 ${MAX_CAPTION_LENGTH}자 이하여야 해요.`);
+    }
+    updates.caption = trimmed;
+    updates.alt = `${trimmed} 사진`;
+  }
+
+  if (input.takenAt !== undefined) {
+    const parsed = new Date(input.takenAt);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error("takenAt 형식이 올바르지 않아요.");
+    }
+    const takenAt = parsed.toISOString();
+    updates.taken_at = takenAt;
+    updates.month_key = toMonthKey(takenAt);
+  }
+
+  if (input.isFeatured !== undefined) {
+    updates.is_featured = input.isFeatured;
+    updates.featured_rank = input.isFeatured ? input.featuredRank ?? null : null;
+  } else if (input.featuredRank !== undefined) {
+    updates.featured_rank = input.featuredRank;
+  }
+
+  if (Object.keys(updates).length === 1 && !hasEventNamesUpdate) {
+    throw new Error("수정할 필드를 최소 하나 이상 전달해 주세요.");
+  }
+
   const { data, error }: { data: GalleryPhotoRow | null; error: { message: string } | null } =
     await ((supabase
       .from(tableName) as QueryChain)
-      .update({
-        is_featured: input.isFeatured,
-        featured_rank: input.isFeatured ? input.featuredRank ?? null : null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", input.photoId)
       .select(GALLERY_SELECT_COLUMNS)
       .single() as QueryPromise<GalleryPhotoRow>);
 
   if (error) {
-    if (isMissingColumnError(error)) {
-      throw new Error("현재 DB 스키마에서는 대표 사진 설정을 지원하지 않아요.");
-    }
-
-    throw new Error(`Failed to update featured photo: ${error.message}`);
+    throw new Error(`Failed to update photo metadata: ${error.message}`);
   }
 
   if (!data) {
-    throw new Error("Failed to update featured photo: no data returned");
+    throw new Error("Failed to update photo metadata: no data returned");
   }
 
-  return mapRowToPhotoItem(data);
+  let eventNames: string[] = [];
+
+  if (hasEventNamesUpdate) {
+    eventNames = await replacePhotoEvents(supabase, data.id, input.eventNames ?? []);
+  } else {
+    try {
+      eventNames = (await listEventNamesByPhotoIds(supabase, [data.id])).get(data.id) ?? [];
+    } catch {
+      eventNames = [];
+    }
+  }
+
+  return mapRowToPhotoItem(data, eventNames);
+};
+
+export const deleteGalleryPhotoRecord = async (
+  supabase: RepositoryClient,
+  input: DeleteGalleryPhotoRecordInput,
+  tableName = getGalleryPhotosTableName(),
+) => {
+  const { data, error }: {
+    data: Pick<GalleryPhotoRow, "id" | "storage_path"> | null;
+    error: { message: string } | null;
+  } = await ((supabase
+    .from(tableName) as QueryChain)
+    .delete()
+    .eq("id", input.photoId)
+    .select("id, storage_path")
+    .single() as QueryPromise<Pick<GalleryPhotoRow, "id" | "storage_path">>);
+
+  if (error) {
+    throw new Error(`Failed to delete gallery photo: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("Failed to delete gallery photo: no data returned");
+  }
+
+  return {
+    id: data.id,
+    storagePath: data.storage_path ?? null,
+  };
 };

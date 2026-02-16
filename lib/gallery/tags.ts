@@ -25,8 +25,14 @@ const extractCaptionHashtags = (caption: string) => {
   return Array.from(caption.matchAll(hashtagRegex)).map((match) => match[1] ?? "");
 };
 
-export const getPhotoTags = (item: Pick<PhotoItem, "caption" | "tags">): string[] => {
-  const raw = [...(item.tags ?? []), ...extractCaptionHashtags(item.caption)];
+export const getPhotoTags = (
+  item: Pick<PhotoItem, "caption" | "tags" | "eventNames">,
+): string[] => {
+  const raw = [
+    ...(item.eventNames ?? []),
+    ...(item.tags ?? []),
+    ...extractCaptionHashtags(item.caption),
+  ];
   const unique = new Set<string>();
 
   for (const source of raw) {

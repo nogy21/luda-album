@@ -7,6 +7,7 @@ import {
   markUploadSuccess,
   pickRetryTargets,
   setUploadProgress,
+  toDateTimeLocalInputValue,
 } from "./upload-queue";
 
 describe("upload queue", () => {
@@ -33,6 +34,19 @@ describe("upload queue", () => {
     expect(summary.totalProgress).toBe(0.25);
   });
 
+  it("prefers file lastModified as default takenAt", () => {
+    const file = new File(["a"], "IMG_20260214_091122.jpg", {
+      type: "image/jpeg",
+      lastModified: new Date("2026-02-20T10:30:00.000Z").getTime(),
+    });
+
+    const queue = createUploadQueue([file]);
+
+    expect(queue[0]?.takenAtInput).toBe(
+      toDateTimeLocalInputValue("2026-02-20T10:30:00.000Z"),
+    );
+  });
+
   it("tracks success and failures with retry candidates", () => {
     const queue = createUploadQueue(files);
     const withSuccess = markUploadSuccess(queue, queue[0].id, "/uploads/a.jpg");
@@ -44,4 +58,3 @@ describe("upload queue", () => {
     expect(pickRetryTargets(withFailure).map((item) => item.file.name)).toEqual(["b.jpg"]);
   });
 });
-

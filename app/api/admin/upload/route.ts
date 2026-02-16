@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/admin/session";
+import { parseEventNamesPayload } from "@/lib/gallery/event-names";
 import { createGalleryImageRecord } from "@/lib/gallery/repository";
+import { extractPhotoUploadMetadata } from "@/lib/gallery/upload-metadata";
 import type { PhotoVisibility } from "@/lib/gallery/types";
 import { notifyUploadedFamilyPhotos } from "@/lib/notifications/web-push";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
+const MAX_CAPTION_LENGTH = 120;
 
 const sanitizeFileName = (name: string) => {
   return name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
@@ -26,6 +29,70 @@ const normalizeVisibility = (value: FormDataEntryValue | null): PhotoVisibility 
   return "family";
 };
 
+const parseRequestedCaption = (value: FormDataEntryValue | null) => {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("caption은 문자열이어야 해요.");
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("caption은 비워둘 수 없어요.");
+  }
+
+  if (trimmed.length > MAX_CAPTION_LENGTH) {
+    throw new Error(`caption은 ${MAX_CAPTION_LENGTH}자 이하여야 해요.`);
+  }
+
+  return trimmed;
+};
+
+const parseRequestedTakenAt = (value: FormDataEntryValue | null) => {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("takenAt은 문자열이어야 해요.");
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("takenAt 형식이 올바르지 않아요.");
+  }
+
+  return parsed.toISOString();
+};
+
+const parseRequestedEventNames = (value: FormDataEntryValue | null) => {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("eventNames는 JSON 문자열이어야 해요.");
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("eventNames JSON 형식이 올바르지 않아요.");
+  }
+
+  const validation = parseEventNamesPayload(parsed);
+
+  if ("error" in validation) {
+    throw new Error(validation.error);
+  }
+
+  return validation.eventNames ?? [];
+};
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
@@ -39,6 +106,25 @@ export async function POST(request: Request) {
 
   const formData = await request.formData();
   const visibility = normalizeVisibility(formData.get("visibility"));
+  let requestedCaption: string | undefined;
+  let requestedTakenAt: string | undefined;
+  let requestedEventNames: string[] | undefined;
+  try {
+    requestedCaption = parseRequestedCaption(formData.get("caption"));
+    requestedTakenAt = parseRequestedTakenAt(formData.get("takenAt"));
+    requestedEventNames = parseRequestedEventNames(formData.get("eventNames"));
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            error instanceof Error ? error.message : "업로드 메타데이터 형식이 올바르지 않아요.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   const files = formData
     .getAll("files")
     .filter((entry): entry is File => entry instanceof File);
@@ -131,6 +217,9 @@ export async function POST(request: Request) {
     }
 
     try {
+      const metadata = await extractPhotoUploadMetadata(file);
+      const caption = requestedCaption ?? metadata.caption;
+      const takenAt = requestedTakenAt ?? metadata.takenAt;
       const created = await createGalleryImageRecord(supabase, {
         src: publicUrl,
         thumbSrc: publicUrl,
@@ -138,6 +227,10 @@ export async function POST(request: Request) {
         originalName: file.name,
         type: file.type,
         size: file.size,
+        caption,
+        alt: `${caption} 사진`,
+        takenAt,
+        eventNames: requestedEventNames,
         visibility,
       });
 

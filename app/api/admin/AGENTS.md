@@ -12,7 +12,11 @@ Admin endpoints handle authentication, session lifecycle, upload mutations, and 
 | `GET /api/admin/session`            | `app/api/admin/session/route.ts`          | Session token verification   |
 | `POST /api/admin/logout`            | `app/api/admin/logout/route.ts`           | Session cookie clear         |
 | `POST /api/admin/upload`            | `app/api/admin/upload/route.ts`           | Requires valid admin session |
+| `GET /api/admin/photos`             | `app/api/admin/photos/route.ts`           | Requires valid admin session |
+| `GET /api/admin/events`             | `app/api/admin/events/route.ts`           | Requires valid admin session |
 | `PATCH /api/admin/photos/[photoId]` | `app/api/admin/photos/[photoId]/route.ts` | Requires valid admin session |
+| `DELETE /api/admin/photos/[photoId]`| `app/api/admin/photos/[photoId]/route.ts` | Requires valid admin session |
+| `GET/POST/DELETE /api/admin/pwa-branding` | `app/api/admin/pwa-branding/route.ts` | Requires valid admin session |
 
 ## BOUNDARY RULES
 

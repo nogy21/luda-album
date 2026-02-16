@@ -6,6 +6,7 @@ export type PhotoItem = {
   thumbSrc: string | null;
   alt: string;
   caption: string;
+  eventNames: string[];
   tags?: string[];
   takenAt: string;
   updatedAt: string;
