@@ -18,7 +18,7 @@ type GuestbookSectionProps = {
   prefillMessage?: string;
 };
 
-const DEFAULT_STATUS_MESSAGE = "따뜻한 한마디를 남겨주시면 바로 위에 올라와요.";
+const DEFAULT_STATUS_MESSAGE = "덕담을 남겨주세요.";
 
 export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
   const [nickname, setNickname] = useState("");
@@ -77,9 +77,9 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
     success: "ui-status-success",
     error: "ui-status-error",
   }[submitStatus];
+
   const remainingTone =
     remaining <= 20 ? "text-[color:var(--color-brand-strong)]" : "text-[color:var(--color-muted)]";
-  const previewMessages = messages.slice(0, 2);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -127,11 +127,11 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
       setMessage("");
       setNickname("");
       setSubmitStatus("success");
-      setStatusMessage("마음이 잘 전달됐어요. 고마워요.");
+      setStatusMessage("등록 완료.");
     } catch {
       setMessages((previous) => previous.filter((item) => item.id !== optimisticId));
       setSubmitStatus("error");
-      setStatusMessage("등록에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      setStatusMessage("등록 실패. 다시 시도해 주세요.");
     }
   };
 
@@ -144,31 +144,12 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
         {asyncAnnounceMessage}
       </output>
 
-      <header className="mb-4 space-y-1.5">
+      <header className="mb-3 space-y-1">
         <h2 className="ui-title">덕담 남기기</h2>
         <p className="text-[var(--text-body)] leading-[var(--leading-body)] text-[color:var(--color-muted)]">
-          짧게 남겨도 충분해요. 닉네임은 비워두면 자동으로 {DEFAULT_GUESTBOOK_NICKNAME}으로 저장돼요.
+          짧게 남겨도 좋아요.
         </p>
       </header>
-
-      <div className="ui-subtle-surface mb-4 rounded-[var(--radius-md)] p-3.5">
-        <p className="text-[0.82rem] font-medium text-[color:var(--color-ink)]">아래에 최근 덕담이 이어집니다.</p>
-        <div className="mt-2 space-y-1.5 text-[0.8rem] leading-[1.5] text-[color:var(--color-muted)]">
-          {isLoading ? <p>최근 덕담을 불러오는 중…</p> : null}
-          {!isLoading && previewMessages.length === 0 ? <p>첫 번째 덕담을 기다리고 있어요.</p> : null}
-          {!isLoading
-            ? previewMessages.map((entry) => (
-                <p key={`preview-${entry.id}`} className="line-clamp-1">
-                  <strong className="font-semibold text-[color:var(--color-ink)]">{entry.nickname}</strong>
-                  <span className="ml-1">{entry.message}</span>
-                </p>
-              ))
-            : null}
-        </div>
-        <a href="#guestbook-comments" className="ui-btn-text mt-1 inline-flex px-0 text-[0.8rem]">
-          아래에서 전체 읽기
-        </a>
-      </div>
 
       <form
         className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/92 p-3.5 sm:p-4"
@@ -207,7 +188,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
           maxLength={MAX_GUESTBOOK_MESSAGE_LENGTH}
           rows={4}
           className="ui-input mt-2.5 w-full bg-white/96 px-3 py-3 text-[0.92rem] leading-[1.62]"
-          placeholder="루다에게 전하고 싶은 마음을 적어주세요."
+          placeholder="루다에게 전하고 싶은 말을 적어주세요."
         />
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -222,13 +203,20 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
         </p>
       </form>
 
+      <div className="mt-3 flex items-center justify-between">
+        <h3 className="text-[0.88rem] font-semibold text-[color:var(--color-ink)]">최근 덕담</h3>
+        <a href="#guestbook-comments" className="ui-btn-text px-0 text-[0.8rem]">
+          전체 보기
+        </a>
+      </div>
+
       {fetchError ? (
         <p className="ui-status ui-status-error mt-3" role="alert">
           {fetchError}
         </p>
       ) : null}
 
-      <div id="guestbook-comments" className="mt-6 space-y-2.5" aria-live="polite">
+      <div id="guestbook-comments" className="mt-3 space-y-2.5" aria-live="polite">
         {isLoading ? (
           <p className="ui-status ui-status-neutral rounded-[var(--radius-md)] px-3.5 py-3 text-[0.88rem]">
             덕담을 불러오는 중…
