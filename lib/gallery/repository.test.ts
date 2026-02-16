@@ -4,6 +4,8 @@ import {
   createGalleryImageRecord,
   listGalleryImagesFromDatabase,
   listPhotoHighlightsFromDatabase,
+  listPhotoSummaryFromDatabase,
+  listPhotosMonthPageFromDatabase,
   listPhotosPageFromDatabase,
 } from "./repository";
 
@@ -200,6 +202,108 @@ describe("gallery repository", () => {
       count: 3,
       label: "2026년 2월",
     });
+  });
+
+  test("listPhotoSummaryFromDatabase groups and orders month buckets", async () => {
+    const summaryRows = [
+      {
+        id: "3",
+        taken_at: "2026-02-12T10:00:00.000Z",
+        updated_at: "2026-02-13T10:00:00.000Z",
+      },
+      {
+        id: "2",
+        taken_at: "2026-01-12T10:00:00.000Z",
+        updated_at: "2026-01-12T10:00:00.000Z",
+      },
+      {
+        id: "1",
+        taken_at: "2026-02-10T10:00:00.000Z",
+        updated_at: "2026-02-10T10:00:00.000Z",
+      },
+    ];
+
+    const summaryBuilder = createBuilder({ data: summaryRows, error: null });
+    const from = vi.fn(() => summaryBuilder);
+
+    const result = await listPhotoSummaryFromDatabase(
+      { from },
+      { visibility: "family" },
+      "gallery_photos",
+    );
+
+    expect(result.totalCount).toBe(3);
+    expect(result.months.map((month) => month.key)).toEqual(["2026-02", "2026-01"]);
+    expect(result.months[0]).toMatchObject({
+      year: 2026,
+      month: 2,
+      count: 2,
+      label: "2026년 2월",
+    });
+  });
+
+  test("listPhotosMonthPageFromDatabase applies month range and cursor pagination", async () => {
+    const rows = [
+      {
+        id: "3",
+        src: "https://example.com/3.jpg",
+        thumb_src: "https://example.com/thumb-3.jpg",
+        alt: "셋째 사진",
+        caption: "셋째",
+        taken_at: "2026-02-12T10:00:00.000Z",
+        updated_at: "2026-02-13T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+      {
+        id: "2",
+        src: "https://example.com/2.jpg",
+        thumb_src: null,
+        alt: "둘째 사진",
+        caption: "둘째",
+        taken_at: "2026-02-11T10:00:00.000Z",
+        updated_at: "2026-02-11T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+      {
+        id: "1",
+        src: "https://example.com/1.jpg",
+        thumb_src: null,
+        alt: "첫째 사진",
+        caption: "첫째",
+        taken_at: "2026-02-10T10:00:00.000Z",
+        updated_at: "2026-02-10T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+    ];
+
+    const pageBuilder = createBuilder({ data: rows, error: null });
+    const from = vi.fn(() => pageBuilder);
+
+    const result = await listPhotosMonthPageFromDatabase(
+      { from },
+      {
+        year: 2026,
+        month: 2,
+        cursor: "2026-02-14T00:00:00.000Z|cursor-id",
+        limit: 2,
+        visibility: "family",
+      },
+      "gallery_photos",
+    );
+
+    expect(from).toHaveBeenCalledWith("gallery_photos");
+    expect(pageBuilder.eq).toHaveBeenCalledWith("visibility", "family");
+    expect(pageBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-01T00:00:00.000Z");
+    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-03-01T00:00:00.000Z");
+    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(result.items).toHaveLength(2);
+    expect(result.nextCursor).toBe("2026-02-11T10:00:00.000Z|2");
   });
 
   test("listPhotoHighlightsFromDatabase prefers featured and excludes overlap", async () => {

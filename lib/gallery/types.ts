@@ -39,3 +39,24 @@ export type HighlightResponse = {
   featured: PhotoItem[];
   highlights: PhotoItem[];
 };
+
+export type PhotoSummaryResponse = {
+  totalCount: number;
+  months: YearMonthStat[];
+};
+
+export type PhotoMonthPageResponse = {
+  year: number;
+  month: number;
+  key: string;
+  items: PhotoItem[];
+  nextCursor: string | null;
+};
+
+export type MonthBucketState = {
+  items: PhotoItem[];
+  nextCursor: string | null;
+  isLoading: boolean;
+  isHydrated: boolean;
+  hasError: string | null;
+};

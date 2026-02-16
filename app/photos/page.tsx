@@ -5,92 +5,84 @@ import { groupGalleryImagesByMonth } from "@/lib/gallery/grouping";
 import { galleryImages } from "@/lib/gallery/images";
 import {
   listPhotoHighlightsFromDatabase,
-  listPhotosPageFromDatabase,
+  listPhotoSummaryFromDatabase,
+  listPhotosMonthPageFromDatabase,
   mapGalleryImageToPhotoItem,
   mapPhotoItemToGalleryImage,
 } from "@/lib/gallery/repository";
-import type { HighlightResponse, PhotoListResponse } from "@/lib/gallery/types";
+import type {
+  HighlightResponse,
+  PhotoItem,
+  PhotoMonthPageResponse,
+  PhotoSummaryResponse,
+} from "@/lib/gallery/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const INITIAL_LIMIT = 36;
+const INITIAL_MONTH_PAGE_LIMIT = 24;
+const INITIAL_PRELOAD_MONTHS = 2;
 
-const parsePositiveInteger = (value: string | undefined) => {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
+const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {
+  return +new Date(right.takenAt) - +new Date(left.takenAt);
 };
 
-type PhotosPageSearchParams = {
-  year?: string;
-  month?: string;
-  day?: string;
-};
-
-const buildStaticPhotoResponse = (options?: { year?: number; month?: number; day?: number }): PhotoListResponse => {
+const buildStaticSummary = (): PhotoSummaryResponse => {
   const items = galleryImages
     .map(mapGalleryImageToPhotoItem)
     .filter((item) => item.visibility === "family")
-    .filter((item) => {
-      if (!options?.year) {
-        return true;
-      }
-
-      const date = new Date(item.takenAt);
-      const year = date.getUTCFullYear();
-      const month = date.getUTCMonth() + 1;
-      const day = date.getUTCDate();
-
-      if (options.day && options.month) {
-        return year === options.year && month === options.month && day === options.day;
-      }
-
-      if (options.month) {
-        return year === options.year && month === options.month;
-      }
-
-      return year === options.year;
-    })
-    .sort((left, right) => +new Date(right.takenAt) - +new Date(left.takenAt));
-  const pageItems = items.slice(0, INITIAL_LIMIT);
+    .sort(sortByTakenAtDesc);
   const grouped = groupGalleryImagesByMonth(items.map(mapPhotoItemToGalleryImage));
 
   return {
-    items: pageItems,
-    nextCursor:
-      items.length > INITIAL_LIMIT && pageItems.length > 0
-        ? `${pageItems[pageItems.length - 1].takenAt}|${pageItems[pageItems.length - 1].id}`
-        : null,
-    summary: {
-      totalCount: items.length,
-      yearMonthStats: grouped.map((group) => ({
-        key: group.key,
-        year: group.year,
-        month: group.month,
-        count: group.items.length,
-        latestTakenAt: group.latestTakenAt,
-        latestUpdatedAt: group.latestUpdatedAt,
-        label: group.label,
-        updatedLabel: group.updatedLabel,
-        metaLabel: group.metaLabel,
-      })),
-    },
+    totalCount: items.length,
+    months: grouped.map((group) => ({
+      key: group.key,
+      year: group.year,
+      month: group.month,
+      count: group.items.length,
+      latestTakenAt: group.latestTakenAt,
+      latestUpdatedAt: group.latestUpdatedAt,
+      label: group.label,
+      updatedLabel: group.updatedLabel,
+      metaLabel: group.metaLabel,
+    })),
   };
 };
 
-const buildStaticHighlights = (source: PhotoListResponse): HighlightResponse => {
-  const sorted = [...source.items].sort(
-    (left, right) => +new Date(right.takenAt) - +new Date(left.takenAt),
-  );
+const buildStaticMonthPage = (
+  year: number,
+  month: number,
+  limit = INITIAL_MONTH_PAGE_LIMIT,
+): PhotoMonthPageResponse => {
+  const monthItems = galleryImages
+    .map(mapGalleryImageToPhotoItem)
+    .filter((item) => item.visibility === "family")
+    .filter((item) => {
+      const date = new Date(item.takenAt);
+      return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month;
+    })
+    .sort(sortByTakenAtDesc);
+  const pageItems = monthItems.slice(0, limit);
+  const hasMore = monthItems.length > limit;
+
+  return {
+    key: `${year}-${String(month).padStart(2, "0")}`,
+    year,
+    month,
+    items: pageItems,
+    nextCursor:
+      hasMore && pageItems.length > 0
+        ? `${pageItems[pageItems.length - 1].takenAt}|${pageItems[pageItems.length - 1].id}`
+        : null,
+  };
+};
+
+const buildStaticHighlights = (): HighlightResponse => {
+  const sorted = galleryImages
+    .map(mapGalleryImageToPhotoItem)
+    .filter((item) => item.visibility === "family")
+    .sort(sortByTakenAtDesc);
 
   return {
     featured: sorted.slice(0, 2),
@@ -98,26 +90,29 @@ const buildStaticHighlights = (source: PhotoListResponse): HighlightResponse => 
   };
 };
 
-export default async function PhotosPage({ searchParams }: { searchParams?: Promise<PhotosPageSearchParams> }) {
-  const resolvedSearchParams = (await searchParams) ?? {};
-  const year = parsePositiveInteger(resolvedSearchParams.year);
-  const month = parsePositiveInteger(resolvedSearchParams.month);
-  const day = parsePositiveInteger(resolvedSearchParams.day);
+const preloadStaticMonthPages = (
+  summary: PhotoSummaryResponse,
+): Record<string, PhotoMonthPageResponse> => {
+  return Object.fromEntries(
+    summary.months
+      .slice(0, INITIAL_PRELOAD_MONTHS)
+      .map((month) => [
+        month.key,
+        buildStaticMonthPage(month.year, month.month, INITIAL_MONTH_PAGE_LIMIT),
+      ]),
+  );
+};
 
+export default async function PhotosPage() {
   const supabase = createServerSupabaseClient();
-  let initialData = buildStaticPhotoResponse({ year, month, day });
-  let initialHighlights = buildStaticHighlights(initialData);
+  let initialSummary = buildStaticSummary();
+  let initialHighlights = buildStaticHighlights();
+  let initialMonthPages = preloadStaticMonthPages(initialSummary);
 
   if (supabase) {
     try {
-      const [photoData, highlightData] = await Promise.all([
-        listPhotosPageFromDatabase(supabase, {
-          limit: INITIAL_LIMIT,
-          year,
-          month,
-          day,
-          visibility: "family",
-        }),
+      const [summary, highlightData] = await Promise.all([
+        listPhotoSummaryFromDatabase(supabase, { visibility: "family" }),
         listPhotoHighlightsFromDatabase(supabase, {
           featuredLimit: 2,
           highlightLimit: 6,
@@ -125,24 +120,58 @@ export default async function PhotosPage({ searchParams }: { searchParams?: Prom
         }),
       ]);
 
-      if (photoData.items.length > 0) {
-        initialData = photoData;
+      if (summary.totalCount > 0) {
+        initialSummary = summary;
         initialHighlights = highlightData;
+
+        const monthPages = await Promise.all(
+          summary.months
+            .slice(0, INITIAL_PRELOAD_MONTHS)
+            .map((month) =>
+              listPhotosMonthPageFromDatabase(
+                supabase,
+                {
+                  year: month.year,
+                  month: month.month,
+                  limit: INITIAL_MONTH_PAGE_LIMIT,
+                  visibility: "family",
+                },
+              ),
+            ),
+        );
+
+        initialMonthPages = Object.fromEntries(
+          monthPages.map((page) => [page.key, page]),
+        );
       }
     } catch {
       // Fall back to bundled static gallery images and metadata.
     }
   }
 
+  const preloadItems = Object.values(initialMonthPages)
+    .flatMap((page) => page.items)
+    .sort(sortByTakenAtDesc);
+  const coverItems = preloadItems.length > 0
+    ? preloadItems
+    : galleryImages
+        .map(mapGalleryImageToPhotoItem)
+        .filter((item) => item.visibility === "family")
+        .sort(sortByTakenAtDesc);
+
   return (
     <AppShell>
-      <CoverCard images={initialData.items.map(mapPhotoItemToGalleryImage)} />
+      <CoverCard images={coverItems.map(mapPhotoItemToGalleryImage)} />
       <GallerySection
-        initialData={initialData}
+        initialSummary={initialSummary}
         initialHighlights={initialHighlights}
-        initialFilter={{ year, month, day }}
+        initialMonthPages={initialMonthPages}
       />
-      <NewPhotoBottomSheet latestPhotoTakenAt={initialData.items[0]?.takenAt ?? null} />
+      <NewPhotoBottomSheet
+        latestPhotoTakenAt={
+          initialSummary.months[0]?.latestTakenAt ?? coverItems[0]?.takenAt ?? null
+        }
+      />
     </AppShell>
   );
 }

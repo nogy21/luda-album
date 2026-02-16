@@ -14,37 +14,26 @@ import { getPhotoTags, groupPhotosByTag } from "@/lib/gallery/tags";
 import { formatMonthMetaLabel } from "@/lib/gallery/time";
 import type {
   HighlightResponse,
+  MonthBucketState,
   PhotoItem,
-  PhotoListResponse,
+  PhotoMonthPageResponse,
+  PhotoSummaryResponse,
   YearMonthStat,
 } from "@/lib/gallery/types";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
-const PAGE_LIMIT = 36;
+const PAGE_LIMIT = 24;
+const INITIAL_PRELOAD_MONTHS = 2;
 
 type GallerySectionProps = {
-  initialData: PhotoListResponse;
+  initialSummary: PhotoSummaryResponse;
   initialHighlights: HighlightResponse;
-  initialFilter?: {
-    year?: number;
-    month?: number;
-    day?: number;
-  };
+  initialMonthPages: Record<string, PhotoMonthPageResponse>;
 };
 
 type LightboxState = {
   items: PhotoItem[];
   index: number;
-};
-
-type MonthGroup = {
-  key: string;
-  label: string;
-  year: number;
-  month: number;
-  latestTakenAt: string;
-  latestUpdatedAt: string;
-  items: PhotoItem[];
 };
 
 type PhotoCommentsResponse = {
@@ -57,6 +46,14 @@ type PhotoCommentErrorResponse = {
 
 type CommentAsyncStatus = "idle" | "loading" | "posting";
 
+const makeEmptyMonthState = (): MonthBucketState => ({
+  items: [],
+  nextCursor: null,
+  isLoading: false,
+  isHydrated: false,
+  hasError: null,
+});
+
 const dedupeById = (items: PhotoItem[]) => {
   return Array.from(new Map(items.map((item) => [item.id, item])).values());
 };
@@ -65,70 +62,52 @@ const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {
   return +new Date(right.takenAt) - +new Date(left.takenAt);
 };
 
-const buildMonthGroups = (items: PhotoItem[]): MonthGroup[] => {
-  const groups = new Map<string, MonthGroup>();
-
-  for (const item of [...items].sort(sortByTakenAtDesc)) {
-    const date = new Date(item.takenAt);
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth() + 1;
-    const key = `${year}-${String(month).padStart(2, "0")}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label: `${year}년 ${month}월`,
-        year,
-        month,
-        latestTakenAt: item.takenAt,
-        latestUpdatedAt: item.updatedAt,
-        items: [],
-      });
-    }
-
-    const group = groups.get(key);
-
-    if (!group) {
-      continue;
-    }
-
-    group.items.push(item);
-
-    if (+new Date(item.updatedAt) > +new Date(group.latestUpdatedAt)) {
-      group.latestUpdatedAt = item.updatedAt;
-    }
-  }
-
-  return [...groups.values()].sort((left, right) => {
-    return +new Date(right.latestTakenAt) - +new Date(left.latestTakenAt);
-  });
-};
-
 const formatDateLabel = (takenAt: string) => {
   const date = new Date(takenAt);
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
-export function GallerySection({ initialData, initialHighlights, initialFilter }: GallerySectionProps) {
-  const [items, setItems] = useState<PhotoItem[]>(() => initialData.items);
-  const [summary, setSummary] = useState<PhotoListResponse["summary"]>(
-    initialData.summary,
+const buildInitialMonthStateMap = (
+  summary: PhotoSummaryResponse,
+  initialMonthPages: Record<string, PhotoMonthPageResponse>,
+): Record<string, MonthBucketState> => {
+  return Object.fromEntries(
+    summary.months.map((month) => {
+      const preloaded = initialMonthPages[month.key];
+
+      if (!preloaded) {
+        return [month.key, makeEmptyMonthState()];
+      }
+
+      return [
+        month.key,
+        {
+          items: preloaded.items,
+          nextCursor: preloaded.nextCursor,
+          isHydrated: true,
+          isLoading: false,
+          hasError: null,
+        },
+      ];
+    }),
   );
+};
+
+export function GallerySection({
+  initialSummary,
+  initialHighlights,
+  initialMonthPages,
+}: GallerySectionProps) {
+  const [summary, setSummary] = useState<PhotoSummaryResponse>(initialSummary);
   const [highlights, setHighlights] = useState<HighlightResponse>(initialHighlights);
-  const [nextCursor, setNextCursor] = useState<string | null>(initialData.nextCursor);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
-  const [openMonthKeys, setOpenMonthKeys] = useState<string[]>(() => {
-    const groups = buildMonthGroups(initialData.items);
-    return groups.slice(0, 2).map((group) => group.key);
-  });
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [activeMonthKey, setActiveMonthKey] = useState<string | null>(
-    initialData.summary.yearMonthStats[0]?.key ?? null,
+  const [monthStateMap, setMonthStateMap] = useState<Record<string, MonthBucketState>>(() =>
+    buildInitialMonthStateMap(initialSummary, initialMonthPages),
   );
-  const [pendingJumpKey, setPendingJumpKey] = useState<string | null>(null);
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const [visibleMonthKeys, setVisibleMonthKeys] = useState<string[]>([]);
+  const [activeMonthKey, setActiveMonthKey] = useState<string | null>(
+    initialSummary.months[0]?.key ?? null,
+  );
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const [viewMode, setViewMode] = useState<"timeline" | "tags">("timeline");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
@@ -140,100 +119,292 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
   const [commentError, setCommentError] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const monthStateMapRef = useRef<Record<string, MonthBucketState>>(monthStateMap);
+  const monthSectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const monthSentinelRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const inFlightMonthRef = useRef(new Set<string>());
 
   useEffect(() => {
-    setItems(initialData.items);
-    setSummary(initialData.summary);
-    setHighlights(initialHighlights);
-    setNextCursor(initialData.nextCursor);
-    setPendingJumpKey(null);
+    monthStateMapRef.current = monthStateMap;
+  }, [monthStateMap]);
 
-    const groups = buildMonthGroups(initialData.items);
-    setOpenMonthKeys(groups.slice(0, 2).map((group) => group.key));
-    setSelectedYear(groups[0]?.year ?? null);
-    setActiveMonthKey(initialData.summary.yearMonthStats[0]?.key ?? null);
-  }, [initialData, initialHighlights]);
+  useEffect(() => {
+    setSummary(initialSummary);
+    setHighlights(initialHighlights);
+    setMonthStateMap(buildInitialMonthStateMap(initialSummary, initialMonthPages));
+    setVisibleMonthKeys([]);
+    setActiveMonthKey(initialSummary.months[0]?.key ?? null);
+  }, [initialSummary, initialHighlights, initialMonthPages]);
+
+  const monthSummaryMap = useMemo(
+    () => new Map(summary.months.map((month) => [month.key, month])),
+    [summary.months],
+  );
+  const monthIndexMap = useMemo(
+    () => new Map(summary.months.map((month, index) => [month.key, index])),
+    [summary.months],
+  );
+
+  const loadedTimelineItems = useMemo(() => {
+    return dedupeById(
+      summary.months.flatMap((month) => monthStateMap[month.key]?.items ?? []),
+    ).sort(sortByTakenAtDesc);
+  }, [summary.months, monthStateMap]);
+
+  const effectiveHighlights = useMemo(() => {
+    const fallbackItems = loadedTimelineItems;
+    const featured = highlights.featured.length > 0 ? highlights.featured : fallbackItems.slice(0, 2);
+    const highlightItems =
+      highlights.highlights.length > 0 ? highlights.highlights : fallbackItems.slice(2, 8);
+
+    return {
+      featured,
+      highlights: highlightItems,
+    };
+  }, [highlights, loadedTimelineItems]);
+  const tagAlbums = useMemo(() => groupPhotosByTag(loadedTimelineItems), [loadedTimelineItems]);
+  const activeTagItems = useMemo(() => {
+    if (!activeTag) {
+      return [];
+    }
+
+    return loadedTimelineItems.filter((item) => getPhotoTags(item).includes(activeTag));
+  }, [activeTag, loadedTimelineItems]);
+
+  const loadMonthPage = useCallback(
+    async (monthKey: string) => {
+      const month = monthSummaryMap.get(monthKey);
+
+      if (!month) {
+        return;
+      }
+
+      if (inFlightMonthRef.current.has(monthKey)) {
+        return;
+      }
+
+      const currentState = monthStateMapRef.current[monthKey] ?? makeEmptyMonthState();
+      const cursor = currentState.isHydrated ? currentState.nextCursor : null;
+
+      if (currentState.isHydrated && !cursor) {
+        return;
+      }
+
+      inFlightMonthRef.current.add(monthKey);
+      setMonthStateMap((current) => {
+        const previous = current[monthKey] ?? makeEmptyMonthState();
+
+        return {
+          ...current,
+          [monthKey]: {
+            ...previous,
+            isLoading: true,
+            hasError: null,
+          },
+        };
+      });
+
+      try {
+        const params = new URLSearchParams({
+          year: `${month.year}`,
+          month: `${month.month}`,
+          limit: `${PAGE_LIMIT}`,
+        });
+
+        if (cursor) {
+          params.set("cursor", cursor);
+        }
+
+        const response = await fetch(`/api/photos/month?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const body = (await response.json()) as
+          | PhotoMonthPageResponse
+          | { error?: string };
+
+        if (!response.ok || !(body as PhotoMonthPageResponse).items) {
+          throw new Error((body as { error?: string }).error || "월별 사진을 불러오지 못했어요.");
+        }
+
+        const page = body as PhotoMonthPageResponse;
+
+        setMonthStateMap((current) => {
+          const previous = current[monthKey] ?? makeEmptyMonthState();
+          const baseItems = cursor ? previous.items : [];
+          const items = dedupeById([...baseItems, ...page.items]).sort(sortByTakenAtDesc);
+
+          return {
+            ...current,
+            [monthKey]: {
+              items,
+              nextCursor: page.nextCursor,
+              isHydrated: true,
+              isLoading: false,
+              hasError: null,
+            },
+          };
+        });
+      } catch (error) {
+        setMonthStateMap((current) => {
+          const previous = current[monthKey] ?? makeEmptyMonthState();
+
+          return {
+            ...current,
+            [monthKey]: {
+              ...previous,
+              isLoading: false,
+              hasError:
+                error instanceof Error
+                  ? error.message
+                  : "월별 사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+            },
+          };
+        });
+      } finally {
+        inFlightMonthRef.current.delete(monthKey);
+      }
+    },
+    [monthSummaryMap],
+  );
+
+  useEffect(() => {
+    const initialMonths = summary.months
+      .slice(0, INITIAL_PRELOAD_MONTHS)
+      .map((month) => month.key);
+
+    for (const monthKey of initialMonths) {
+      void loadMonthPage(monthKey);
+    }
+  }, [summary.months, loadMonthPage]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      setReduceMotion(media.matches);
-    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            continue;
+          }
 
-    update();
-    media.addEventListener("change", update);
+          const monthKey = (entry.target as HTMLElement).dataset.monthKey;
+
+          if (!monthKey) {
+            continue;
+          }
+
+          void loadMonthPage(monthKey);
+
+          const currentIndex = monthIndexMap.get(monthKey);
+          const nextMonthKey =
+            typeof currentIndex === "number"
+              ? summary.months[currentIndex + 1]?.key
+              : undefined;
+
+          if (nextMonthKey) {
+            void loadMonthPage(nextMonthKey);
+          }
+        }
+      },
+      { rootMargin: "260px 0px", threshold: 0.01 },
+    );
+
+    for (const month of summary.months) {
+      const target = monthSentinelRefs.current[month.key];
+
+      if (target) {
+        observer.observe(target);
+      }
+    }
 
     return () => {
-      media.removeEventListener("change", update);
+      observer.disconnect();
     };
-  }, []);
-
-  const monthGroups = useMemo(() => buildMonthGroups(items), [items]);
-  const monthStatMap = useMemo(
-    () => new Map(summary.yearMonthStats.map((stat) => [stat.key, stat])),
-    [summary.yearMonthStats],
-  );
-
-  const years = useMemo(() => {
-    return Array.from(new Set(summary.yearMonthStats.map((stat) => stat.year)));
-  }, [summary.yearMonthStats]);
+  }, [summary.months, monthIndexMap, loadMonthPage]);
 
   useEffect(() => {
-    if (selectedYear || years.length === 0) {
+    if (typeof window === "undefined") {
       return;
     }
 
-    setSelectedYear(years[0]);
-  }, [selectedYear, years]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisibleMonthKeys((current) => {
+          const next = new Set(current);
+          let changed = false;
 
-  const visibleMonthGroups = useMemo(() => {
-    if (!selectedYear) {
-      return monthGroups;
+          for (const entry of entries) {
+            const monthKey = (entry.target as HTMLElement).dataset.monthKey;
+
+            if (!monthKey) {
+              continue;
+            }
+
+            if (entry.isIntersecting) {
+              if (!next.has(monthKey)) {
+                next.add(monthKey);
+                changed = true;
+              }
+            } else if (next.delete(monthKey)) {
+              changed = true;
+            }
+          }
+
+          return changed ? [...next] : current;
+        });
+      },
+      { rootMargin: "-24% 0px -58% 0px", threshold: [0, 0.2, 0.5] },
+    );
+
+    for (const month of summary.months) {
+      const target = monthSectionRefs.current[month.key];
+
+      if (target) {
+        observer.observe(target);
+      }
     }
 
-    return monthGroups.filter((group) => group.year === selectedYear);
-  }, [monthGroups, selectedYear]);
-  const visibleMonthStats = useMemo(() => {
-    if (!selectedYear) {
-      return summary.yearMonthStats;
-    }
-
-    return summary.yearMonthStats.filter((stat) => stat.year === selectedYear);
-  }, [selectedYear, summary.yearMonthStats]);
+    return () => {
+      observer.disconnect();
+    };
+  }, [summary.months]);
 
   useEffect(() => {
-    if (visibleMonthStats.length === 0) {
-      setActiveMonthKey(null);
+    if (visibleMonthKeys.length === 0) {
+      if (summary.months.length > 0) {
+        setActiveMonthKey(summary.months[0].key);
+      }
       return;
     }
 
-    if (!activeMonthKey || !visibleMonthStats.some((stat) => stat.key === activeMonthKey)) {
-      setActiveMonthKey(visibleMonthStats[0]?.key ?? null);
+    const sorted = [...visibleMonthKeys].sort((left, right) => {
+      return (monthIndexMap.get(left) ?? 0) - (monthIndexMap.get(right) ?? 0);
+    });
+    const nextActive = sorted[0] ?? null;
+
+    if (nextActive !== activeMonthKey) {
+      setActiveMonthKey(nextActive);
     }
-  }, [activeMonthKey, visibleMonthStats]);
+  }, [activeMonthKey, monthIndexMap, summary.months, visibleMonthKeys]);
 
-  const effectiveHighlights = useMemo(() => {
-    const featured = highlights.featured.length > 0 ? highlights.featured : items.slice(0, 2);
-    const highlightItems = highlights.highlights.length > 0 ? highlights.highlights : items.slice(2, 8);
+  useEffect(() => {
+    for (const monthKey of visibleMonthKeys) {
+      void loadMonthPage(monthKey);
 
-    return {
-      featured,
-      highlights: highlightItems,
-    };
-  }, [highlights, items]);
-  const tagAlbums = useMemo(() => groupPhotosByTag(items), [items]);
-  const activeTagItems = useMemo(() => {
-    if (!activeTag) {
-      return [];
+      const currentIndex = monthIndexMap.get(monthKey);
+      const nextMonthKey =
+        typeof currentIndex === "number"
+          ? summary.months[currentIndex + 1]?.key
+          : undefined;
+
+      if (nextMonthKey) {
+        void loadMonthPage(nextMonthKey);
+      }
     }
-
-    return items.filter((item) => getPhotoTags(item).includes(activeTag));
-  }, [activeTag, items]);
+  }, [visibleMonthKeys, summary.months, monthIndexMap, loadMonthPage]);
 
   useEffect(() => {
     if (!lightbox) {
@@ -295,110 +466,6 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
     };
   }, [lightbox]);
 
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || isLoadingMore) {
-      return;
-    }
-
-    setIsLoadingMore(true);
-    setLoadError(null);
-
-    try {
-      const params = new URLSearchParams({
-        cursor: nextCursor,
-        limit: `${PAGE_LIMIT}`,
-      });
-
-      if (initialFilter?.year) {
-        params.set("year", `${initialFilter.year}`);
-      }
-
-      if (initialFilter?.month) {
-        params.set("month", `${initialFilter.month}`);
-      }
-
-      if (initialFilter?.day) {
-        params.set("day", `${initialFilter.day}`);
-      }
-
-      const response = await fetch(`/api/photos?${params.toString()}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const body = (await response.json()) as PhotoListResponse | { error?: string };
-
-      if (!response.ok || !(body as PhotoListResponse).items) {
-        throw new Error((body as { error?: string }).error || "사진을 이어서 불러오지 못했어요.");
-      }
-
-      const page = body as PhotoListResponse;
-
-      setItems((current) => dedupeById([...current, ...page.items]).sort(sortByTakenAtDesc));
-      setSummary(page.summary);
-      setNextCursor(page.nextCursor);
-    } catch (error) {
-      setLoadError(
-        error instanceof Error ? error.message : "사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
-      );
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [isLoadingMore, nextCursor, initialFilter]);
-
-  useEffect(() => {
-    if (!sentinelRef.current || !nextCursor || isLoadingMore) {
-      return;
-    }
-
-    const target = sentinelRef.current;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-
-        if (!entry?.isIntersecting) {
-          return;
-        }
-
-        void loadMore();
-      },
-      { rootMargin: "160px 0px" },
-    );
-
-    observer.observe(target);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [isLoadingMore, loadMore, nextCursor]);
-
-  useEffect(() => {
-    if (!pendingJumpKey) {
-      return;
-    }
-
-    const target = document.getElementById(`archive-${pendingJumpKey}`);
-
-    if (target) {
-      target.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "start",
-      });
-      setPendingJumpKey(null);
-      return;
-    }
-
-    if (nextCursor && !isLoadingMore) {
-      void loadMore();
-      return;
-    }
-
-    if (!nextCursor && !isLoadingMore) {
-      setPendingJumpKey(null);
-      setLoadError("선택한 월에는 아직 사진이 없어요.");
-    }
-  }, [isLoadingMore, loadMore, nextCursor, pendingJumpKey, reduceMotion]);
-
   const openLightbox = (
     targetItems: PhotoItem[],
     index: number,
@@ -450,9 +517,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         [photoId]: (body as PhotoCommentsResponse).items,
       }));
     } catch (error) {
-      setCommentError(
-        error instanceof Error ? error.message : "댓글을 불러오지 못했어요.",
-      );
+      setCommentError(error instanceof Error ? error.message : "댓글을 불러오지 못했어요.");
     } finally {
       setCommentStatus("idle");
     }
@@ -515,53 +580,36 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
       }));
       setCommentMessage("");
     } catch (error) {
-      setCommentError(
-        error instanceof Error ? error.message : "댓글 등록에 실패했어요.",
-      );
+      setCommentError(error instanceof Error ? error.message : "댓글 등록에 실패했어요.");
     } finally {
       setCommentStatus("idle");
     }
   };
 
-  const toggleMonth = (monthKey: string) => {
-    setOpenMonthKeys((current) =>
-      current.includes(monthKey)
-        ? current.filter((key) => key !== monthKey)
-        : [...current, monthKey],
+  const selectedMonthMeta = (month: YearMonthStat): string => {
+    const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
+
+    if (!monthState.isHydrated || monthState.items.length === 0) {
+      return formatMonthMetaLabel(month.year, month.month, month.count, month.latestUpdatedAt);
+    }
+
+    const latestUpdatedAt = monthState.items.reduce((latest, item) => {
+      if (+new Date(item.updatedAt) > +new Date(latest)) {
+        return item.updatedAt;
+      }
+
+      return latest;
+    }, monthState.items[0].updatedAt);
+
+    return formatMonthMetaLabel(
+      month.year,
+      month.month,
+      monthState.items.length,
+      latestUpdatedAt,
     );
   };
 
-  const jumpToMonth = (monthKey: string) => {
-    setActiveMonthKey(monthKey);
-    const target = document.getElementById(`archive-${monthKey}`);
-
-    if (!target) {
-      setPendingJumpKey(monthKey);
-      return;
-    }
-
-    target.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      block: "start",
-    });
-  };
-
-  const openYear = (year: number) => {
-    setSelectedYear(year);
-
-    const firstMonth = summary.yearMonthStats.find((stat) => stat.year === year);
-
-    if (firstMonth) {
-      setActiveMonthKey(firstMonth.key);
-      jumpToMonth(firstMonth.key);
-    }
-  };
-
-  const selectedMonthMeta = (group: MonthGroup): YearMonthStat | null => {
-    return monthStatMap.get(group.key) ?? null;
-  };
-
-  if (items.length === 0) {
+  if (summary.totalCount === 0) {
     return (
       <section
         id="gallery"
@@ -593,9 +641,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         }
       }}
     >
-      <div
-        className="enter-fade-up w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
-      >
+      <div className="enter-fade-up w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black">
         <div>
           <Image
             src={selectedImage.src}
@@ -758,7 +804,7 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         <div className="mb-5">
           <h2 className="ui-title">요즘 루다는</h2>
           <p className="mt-1.5 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
-            날짜별, 이벤트별로 지금의 순간을 골라보세요.
+            칩 선택 없이 스크롤로 월별 앨범을 이어서 확인해요.
           </p>
         </div>
 
@@ -793,27 +839,37 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
                     태그 목록
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
-                  {activeTagItems.map((item, index) => (
-                    <button
-                      key={`tag-item-${item.id}`}
-                      type="button"
-                      onClick={(event) => openLightbox(activeTagItems, index, event.currentTarget)}
-                      className="group relative overflow-hidden rounded-[0.82rem] bg-[color:var(--color-brand-soft)] text-left"
-                      aria-label={`${item.caption} 확대 보기`}
-                    >
-                      <Image
-                        src={item.thumbSrc ?? item.src}
-                        alt={item.alt}
-                        width={420}
-                        height={420}
-                        sizes="(max-width: 767px) 50vw, 280px"
-                        className="motion-safe-scale aspect-square w-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
+                {activeTagItems.length === 0 ? (
+                  <p className="rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/84 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]">
+                    아직 이 태그의 사진이 로드되지 않았어요. 날짜별에서 스크롤하면 자동으로 추가됩니다.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                    {activeTagItems.map((item, index) => (
+                      <button
+                        key={`tag-item-${item.id}`}
+                        type="button"
+                        onClick={(event) => openLightbox(activeTagItems, index, event.currentTarget)}
+                        className="group relative overflow-hidden rounded-[0.82rem] bg-[color:var(--color-brand-soft)] text-left"
+                        aria-label={`${item.caption} 확대 보기`}
+                      >
+                        <Image
+                          src={item.thumbSrc ?? item.src}
+                          alt={item.alt}
+                          width={420}
+                          height={420}
+                          sizes="(max-width: 767px) 50vw, 280px"
+                          className="motion-safe-scale aspect-square w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
+            ) : tagAlbums.length === 0 ? (
+              <p className="rounded-[0.9rem] border border-[color:var(--color-line)] bg-white/84 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]">
+                태그 앨범을 보려면 먼저 날짜별 섹션을 스크롤해 사진을 불러와 주세요.
+              </p>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
                 {tagAlbums.map((album) => (
@@ -844,197 +900,196 @@ export function GallerySection({ initialData, initialHighlights, initialFilter }
         </section>
 
         {viewMode === "timeline" ? (
-        <section id="gallery-highlights" className="mb-5 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">요즘 루다 포인트</h3>
-          </div>
+          <section id="gallery-highlights" className="mb-5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">요즘 루다 포인트</h3>
+            </div>
 
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-            {effectiveHighlights.featured.map((image, index) => (
-              <button
-                key={`featured-${image.id}`}
-                data-highlight-card
-                type="button"
-                onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
-                className="group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left"
-                aria-label={`${image.caption} 확대 보기`}
-              >
-                <Image
-                  src={image.thumbSrc ?? image.src}
-                  alt={image.alt}
-                  width={960}
-                  height={760}
-                  sizes="(max-width: 767px) 50vw, 420px"
-                  className="motion-safe-scale aspect-[4/3] w-full object-cover"
-                  priority
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/52 to-transparent px-2.5 pb-2.5 pt-9">
-                  <p className="text-[0.76rem] font-semibold text-white/95">{image.caption}</p>
-                  <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {effectiveHighlights.highlights.length > 0 ? (
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-              {effectiveHighlights.highlights.map((image, index) => (
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+              {effectiveHighlights.featured.map((image, index) => (
                 <button
-                  key={`highlight-${image.id}`}
+                  key={`featured-${image.id}`}
                   data-highlight-card
                   type="button"
-                  onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
-                  className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left"
+                  onClick={(event) => openLightbox(effectiveHighlights.featured, index, event.currentTarget)}
+                  className="group relative overflow-hidden rounded-[0.95rem] bg-[color:var(--color-brand-soft)] text-left"
                   aria-label={`${image.caption} 확대 보기`}
                 >
                   <Image
                     src={image.thumbSrc ?? image.src}
                     alt={image.alt}
-                    width={480}
-                    height={480}
-                    sizes="(max-width: 767px) 33vw, 220px"
-                    className="motion-safe-scale aspect-square w-full object-cover"
+                    width={960}
+                    height={760}
+                    sizes="(max-width: 767px) 50vw, 420px"
+                    className="motion-safe-scale aspect-[4/3] w-full object-cover"
+                    priority
                   />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/52 to-transparent px-2.5 pb-2.5 pt-9">
+                    <p className="text-[0.76rem] font-semibold text-white/95">{image.caption}</p>
+                    <p className="text-[0.66rem] text-white/78">{formatDateLabel(image.takenAt)}</p>
+                  </div>
                 </button>
               ))}
             </div>
-          ) : null}
-        </section>
+
+            {effectiveHighlights.highlights.length > 0 ? (
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                {effectiveHighlights.highlights.map((image, index) => (
+                  <button
+                    key={`highlight-${image.id}`}
+                    data-highlight-card
+                    type="button"
+                    onClick={(event) => openLightbox(effectiveHighlights.highlights, index, event.currentTarget)}
+                    className="group relative overflow-hidden rounded-[0.9rem] bg-[color:var(--color-brand-soft)] text-left"
+                    aria-label={`${image.caption} 확대 보기`}
+                  >
+                    <Image
+                      src={image.thumbSrc ?? image.src}
+                      alt={image.alt}
+                      width={480}
+                      height={480}
+                      sizes="(max-width: 767px) 33vw, 220px"
+                      className="motion-safe-scale aspect-square w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
         ) : null}
 
         {viewMode === "timeline" ? (
-        <section id="monthly-archive" className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            {years.map((year) => (
-              <button
-                key={`year-${year}`}
-                type="button"
-                onClick={() => openYear(year)}
-                className={`ui-btn px-3.5 transition-colors ${
-                  selectedYear === year ? "ui-btn-primary" : "ui-btn-secondary"
-                }`}
-              >
-                {year}년
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {visibleMonthStats.map((group) => (
-              <button
-                key={`${group.key}-jump`}
-                type="button"
-                onClick={() => jumpToMonth(group.key)}
-                aria-label={`${group.year}년 ${group.month}월 사진 ${group.count}장`}
-                className={`shrink-0 rounded-full border px-3.5 py-2 text-left text-[0.78rem] font-semibold transition-colors ${
-                  activeMonthKey === group.key
-                    ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-ink)]"
-                    : "border-[color:var(--color-line)] bg-white/88 text-[color:var(--color-muted)] hover:border-[color:var(--color-brand)]/40 hover:text-[color:var(--color-ink)]"
-                }`}
-                aria-pressed={activeMonthKey === group.key}
-              >
-                <span>{group.month}월</span>
-                <span className="ml-1.5 text-[0.68rem] font-medium opacity-75">{group.count}장</span>
-              </button>
-            ))}
-          </div>
-
-          {visibleMonthGroups.map((group) => {
-            const monthStat = selectedMonthMeta(group);
-            const isOpen = openMonthKeys.includes(group.key);
-            const metaLabel =
-              monthStat?.metaLabel ??
-              formatMonthMetaLabel(
-                group.year,
-                group.month,
-                group.items.length,
-                group.latestUpdatedAt,
-              );
-
-            return (
-              <article
-                key={group.key}
-                id={`archive-${group.key}`}
-                className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleMonth(group.key)}
-                  aria-expanded={isOpen}
-                  aria-label={`${group.label} ${isOpen ? "접기" : "펼치기"}`}
-                  className="flex min-h-[3.1rem] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
-                >
-                  <div>
-                    <p className="text-[0.95rem] font-semibold text-[color:var(--color-ink)]">{group.label}</p>
-                    <p className="mt-1 text-[0.71rem] font-medium text-[color:var(--color-muted)]">{metaLabel}</p>
-                  </div>
-                  <span className="text-base font-semibold text-[color:var(--color-muted)]">{isOpen ? "−" : "+"}</span>
-                </button>
-
-                {isOpen ? (
-                  <div className="grid grid-cols-2 gap-1.5 p-2 pt-0 md:grid-cols-3">
-                    {group.items.map((image, index) => (
-                      <button
-                        key={image.id}
-                        type="button"
-                        onClick={(event) => openLightbox(group.items, index, event.currentTarget)}
-                        className="group relative overflow-hidden rounded-[0.88rem] bg-[color:var(--color-brand-soft)] text-left"
-                        aria-label={`${image.caption} 확대 보기`}
-                      >
-                        <Image
-                          src={image.thumbSrc ?? image.src}
-                          alt={image.alt}
-                          width={420}
-                          height={560}
-                          sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
-                          className="motion-safe-scale aspect-square w-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
+          <section id="monthly-archive" className="space-y-2.5">
+            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86 px-3.5 py-3">
+              <p className="text-[0.76rem] font-semibold text-[color:var(--color-brand-strong)]">전체 앨범</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-[1rem] font-semibold text-[color:var(--color-ink)]">
+                  총 {summary.totalCount}장
+                </h3>
+                {activeMonthKey ? (
+                  <p className="text-[0.78rem] font-medium text-[color:var(--color-muted)]">
+                    현재 {monthSummaryMap.get(activeMonthKey)?.label}
+                  </p>
                 ) : null}
-              </article>
-            );
-          })}
-        </section>
+              </div>
+              <p className="mt-1 text-[0.76rem] text-[color:var(--color-muted)]">
+                스크롤할 때 월 단위로 자동 로딩돼요.
+              </p>
+            </div>
+
+            {summary.months.map((month) => {
+              const monthState = monthStateMap[month.key] ?? makeEmptyMonthState();
+              const showSkeleton =
+                monthState.isLoading && (!monthState.isHydrated || monthState.items.length === 0);
+              const showEmpty =
+                monthState.isHydrated &&
+                !monthState.isLoading &&
+                monthState.items.length === 0 &&
+                !monthState.hasError;
+              const showInitialHint =
+                !monthState.isHydrated && !monthState.isLoading && !monthState.hasError;
+
+              return (
+                <article
+                  key={month.key}
+                  id={`archive-${month.key}`}
+                  ref={(node) => {
+                    monthSectionRefs.current[month.key] = node;
+                  }}
+                  data-month-key={month.key}
+                  className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white/86"
+                >
+                  <header className="px-3.5 py-3">
+                    <p className="text-[0.96rem] font-semibold text-[color:var(--color-ink)]">
+                      {month.year}년 {month.month}월
+                    </p>
+                    <p className="mt-1 text-[0.72rem] font-medium text-[color:var(--color-muted)]">
+                      총 {month.count}장 · {selectedMonthMeta(month)}
+                    </p>
+                  </header>
+
+                  {monthState.items.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-1.5 p-2 pt-0 md:grid-cols-3">
+                      {monthState.items.map((image, index) => (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={(event) => openLightbox(monthState.items, index, event.currentTarget)}
+                          className="group relative overflow-hidden rounded-[0.88rem] bg-[color:var(--color-brand-soft)] text-left"
+                          aria-label={`${image.caption} 확대 보기`}
+                        >
+                          <Image
+                            src={image.thumbSrc ?? image.src}
+                            alt={image.alt}
+                            width={420}
+                            height={560}
+                            sizes="(max-width: 767px) 50vw, (max-width: 1024px) 33vw, 280px"
+                            className="motion-safe-scale aspect-square w-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {showSkeleton ? (
+                    <div className="grid grid-cols-2 gap-1.5 p-2 pt-0 md:grid-cols-3">
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <div
+                          key={`${month.key}-skeleton-${index}`}
+                          className="aspect-square rounded-[0.88rem] bg-[color:var(--color-brand-soft)]/70"
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {showInitialHint ? (
+                    <p className="px-3.5 pb-3 text-[0.82rem] text-[color:var(--color-muted)]">
+                      이 영역에 진입하면 사진을 불러옵니다.
+                    </p>
+                  ) : null}
+
+                  {showEmpty ? (
+                    <p className="px-3.5 pb-3 text-[0.82rem] text-[color:var(--color-muted)]">
+                      이 달에는 사진이 아직 없어요.
+                    </p>
+                  ) : null}
+
+                  {monthState.hasError ? (
+                    <div
+                      className="mx-3.5 mb-3 flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-rose-200/90 bg-rose-50 px-3 py-2 text-[0.8rem] text-rose-700"
+                      role="alert"
+                    >
+                      <span>{monthState.hasError}</span>
+                      <button
+                        type="button"
+                        onClick={() => void loadMonthPage(month.key)}
+                        className="ui-btn ui-btn-secondary px-3"
+                      >
+                        다시 시도
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {monthState.isHydrated && monthState.nextCursor ? (
+                    <p className="px-3.5 pb-2 text-[0.72rem] text-[color:var(--color-muted)]">
+                      계속 스크롤하면 이 달의 사진을 더 불러와요.
+                    </p>
+                  ) : null}
+
+                  <div
+                    ref={(node) => {
+                      monthSentinelRefs.current[month.key] = node;
+                    }}
+                    data-month-key={month.key}
+                    className="h-1 w-full"
+                    aria-hidden="true"
+                  />
+                </article>
+              );
+            })}
+          </section>
         ) : null}
-
-        <div ref={sentinelRef} className="mt-4 h-1 w-full" aria-hidden="true" />
-
-        {isLoadingMore ? (
-          <p
-            className="mt-3 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white/75 px-3 py-2 text-[0.82rem] text-[color:var(--color-muted)]"
-            aria-live="polite"
-          >
-            사진을 이어서 불러오는 중이에요…
-          </p>
-        ) : null}
-
-        {loadError ? (
-          <div
-            className="mt-3 flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-rose-200/80 bg-rose-50/88 px-3 py-2 text-[0.82rem] text-rose-700"
-            role="alert"
-          >
-            <span>{loadError}</span>
-              <button
-                type="button"
-                onClick={() => void loadMore()}
-                className="ui-btn ui-btn-secondary px-3"
-              >
-                다시 시도
-              </button>
-          </div>
-        ) : null}
-
-        {nextCursor && !isLoadingMore ? (
-          <button
-            type="button"
-            onClick={() => void loadMore()}
-            className="ui-btn ui-btn-secondary mt-3 px-4"
-          >
-              사진 더 보기
-            </button>
-          ) : null}
       </section>
 
       {portalRoot && lightboxOverlay ? createPortal(lightboxOverlay, portalRoot) : null}

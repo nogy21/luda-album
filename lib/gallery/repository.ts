@@ -6,8 +6,10 @@ import {
 } from "./time";
 import type {
   HighlightResponse,
+  PhotoMonthPageResponse,
   PhotoItem,
   PhotoListResponse,
+  PhotoSummaryResponse,
   PhotoVisibility,
   YearMonthStat,
 } from "./types";
@@ -67,6 +69,21 @@ export type ListPhotosPageOptions = {
 export type ListHighlightOptions = {
   featuredLimit?: number;
   highlightLimit?: number;
+  visibility?: PhotoVisibility;
+};
+
+export type ListPhotoSummaryOptions = {
+  year?: number;
+  month?: number;
+  day?: number;
+  visibility?: PhotoVisibility;
+};
+
+export type ListPhotosMonthPageOptions = {
+  year: number;
+  month: number;
+  cursor?: string;
+  limit?: number;
   visibility?: PhotoVisibility;
 };
 
@@ -237,6 +254,16 @@ const applyDateRangeFilter = (
     .lt("taken_at", toDate.toISOString());
 };
 
+const getMonthDateRange = (year: number, month: number) => {
+  const fromDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const toDate = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+
+  return {
+    fromDate: fromDate.toISOString(),
+    toDate: toDate.toISOString(),
+  };
+};
+
 const buildYearMonthStats = (rows: GalleryPhotoSummaryRow[]): YearMonthStat[] => {
   const map = new Map<
     string,
@@ -315,22 +342,13 @@ const buildYearMonthStats = (rows: GalleryPhotoSummaryRow[]): YearMonthStat[] =>
     }));
 };
 
-const listPhotoSummaryFromDatabase = async (
+export const listPhotoSummaryFromDatabase = async (
   supabase: RepositoryClient,
-  {
-    tableName,
-    year,
-    month,
-    day,
-    visibility,
-  }: {
-    tableName: string;
-    year?: number;
-    month?: number;
-    visibility?: PhotoVisibility;
-    day?: number;
-  },
-): Promise<{ totalCount: number; yearMonthStats: YearMonthStat[] }> => {
+  options: ListPhotoSummaryOptions = {},
+  tableName = getGalleryPhotosTableName(),
+): Promise<PhotoSummaryResponse> => {
+  const { year, month, day, visibility } = options;
+
   let query = supabase
     .from(tableName) as QueryChain;
 
@@ -354,7 +372,7 @@ const listPhotoSummaryFromDatabase = async (
 
   return {
     totalCount: rows.length,
-    yearMonthStats: buildYearMonthStats(rows),
+    months: buildYearMonthStats(rows),
   };
 };
 
@@ -428,17 +446,78 @@ export const listPhotosPageFromDatabase = async (
   const items = pageRows.map(mapRowToPhotoItem);
 
   const summary = await listPhotoSummaryFromDatabase(supabase, {
-    tableName,
     year: options.year,
     month: options.month,
     day: options.day,
     visibility: options.visibility,
-  });
+  }, tableName);
 
   return {
     items,
     nextCursor: hasMore && pageRows.length > 0 ? encodeCursor(pageRows[pageRows.length - 1]) : null,
-    summary,
+    summary: {
+      totalCount: summary.totalCount,
+      yearMonthStats: summary.months,
+    },
+  };
+};
+
+export const listPhotosMonthPageFromDatabase = async (
+  supabase: RepositoryClient,
+  options: ListPhotosMonthPageOptions,
+  tableName = getGalleryPhotosTableName(),
+): Promise<PhotoMonthPageResponse> => {
+  if (
+    !Number.isInteger(options.year) ||
+    !Number.isInteger(options.month) ||
+    options.month < 1 ||
+    options.month > 12
+  ) {
+    throw new Error("Invalid year/month range.");
+  }
+
+  const limit = clampLimit(options.limit);
+  const queryLimit = limit + 1;
+  const cursorTakenAt = parseCursor(options.cursor);
+  const { fromDate, toDate } = getMonthDateRange(options.year, options.month);
+
+  let query = supabase
+    .from(tableName) as QueryChain;
+
+  query = query
+    .select(GALLERY_SELECT_COLUMNS)
+    .order("taken_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(queryLimit);
+
+  query = query
+    .eq("visibility", getQueryVisibility(options.visibility))
+    .gte("taken_at", fromDate)
+    .lt("taken_at", toDate);
+
+  if (cursorTakenAt) {
+    query = query.lt("taken_at", cursorTakenAt);
+  }
+
+  const { data, error } = (await (query as unknown as QueryPromise<GalleryPhotoRow[]>)) as {
+    data: GalleryPhotoRow[] | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    throw new Error(`Failed to list monthly photos page: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  return {
+    year: options.year,
+    month: options.month,
+    key: `${options.year}-${String(options.month).padStart(2, "0")}`,
+    items: pageRows.map(mapRowToPhotoItem),
+    nextCursor: hasMore && pageRows.length > 0 ? encodeCursor(pageRows[pageRows.length - 1]) : null,
   };
 };
 

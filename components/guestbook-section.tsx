@@ -12,13 +12,18 @@ type GuestbookApiError = {
   error: string;
 };
 
-type SubmitStatus = "idle" | "posting" | "success" | "error";
+type SubmitStatus = "idle" | "posting";
+type ToastTone = "success" | "error";
+type ToastState = {
+  tone: ToastTone;
+  message: string;
+};
 
 type GuestbookSectionProps = {
   prefillMessage?: string;
 };
 
-const DEFAULT_STATUS_MESSAGE = "덕담을 남겨주세요.";
+const DEFAULT_ANNOUNCE_MESSAGE = "덕담을 남겨주세요.";
 
 export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
   const [nickname, setNickname] = useState("");
@@ -28,8 +33,9 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
   const [messages, setMessages] = useState<GuestbookRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
-  const [statusMessage, setStatusMessage] = useState(DEFAULT_STATUS_MESSAGE);
+  const [announceMessage, setAnnounceMessage] = useState(DEFAULT_ANNOUNCE_MESSAGE);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -69,17 +75,28 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
 
   const asyncAnnounceMessage = isLoading
     ? "덕담 목록을 불러오는 중입니다."
-    : fetchError || statusMessage;
-
-  const statusTone = {
-    idle: "ui-status-neutral",
-    posting: "ui-status-brand",
-    success: "ui-status-success",
-    error: "ui-status-error",
-  }[submitStatus];
+    : fetchError || announceMessage;
 
   const remainingTone =
     remaining <= 20 ? "text-[color:var(--color-brand-strong)]" : "text-[color:var(--color-muted)]";
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setToast(null);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [toast]);
+
+  const showToast = (tone: ToastTone, nextMessage: string) => {
+    setToast({ tone, message: nextMessage });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -89,8 +106,9 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
     }
 
     if (!message.trim()) {
-      setSubmitStatus("error");
-      setStatusMessage("덕담 내용을 입력해 주세요.");
+      const emptyMessage = "덕담 내용을 입력해 주세요.";
+      setAnnounceMessage(emptyMessage);
+      showToast("error", emptyMessage);
       return;
     }
 
@@ -104,7 +122,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
 
     setMessages((previous) => [optimisticMessage, ...previous]);
     setSubmitStatus("posting");
-    setStatusMessage("등록 중이에요…");
+    setAnnounceMessage("등록 중이에요…");
 
     try {
       const response = await fetch("/api/guestbook", {
@@ -126,20 +144,38 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
       );
       setMessage("");
       setNickname("");
-      setSubmitStatus("success");
-      setStatusMessage("등록 완료.");
+      setSubmitStatus("idle");
+      setAnnounceMessage("덕담이 등록되었어요.");
+      showToast("success", "덕담이 등록되었어요.");
     } catch {
       setMessages((previous) => previous.filter((item) => item.id !== optimisticId));
-      setSubmitStatus("error");
-      setStatusMessage("등록 실패. 다시 시도해 주세요.");
+      const errorMessage = "덕담 등록에 실패했어요. 잠시 후 다시 시도해 주세요.";
+      setSubmitStatus("idle");
+      setAnnounceMessage(errorMessage);
+      showToast("error", errorMessage);
     }
   };
 
   return (
     <section
       id="guestbook"
-      className="ui-surface scroll-mt-24 w-full rounded-[var(--radius-lg)] p-4 sm:p-5"
+      className="ui-surface scroll-mt-24 flex min-h-[calc(100dvh-var(--page-bottom-content-padding)-1rem)] w-full flex-col overflow-hidden rounded-[var(--radius-lg)] p-4 sm:p-5"
     >
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[85] flex justify-center px-4">
+          <p
+            role={toast.tone === "error" ? "alert" : "status"}
+            className={`pointer-events-auto rounded-full border px-4 py-2 text-[0.78rem] font-semibold shadow-[0_10px_26px_rgb(29_26_34/18%)] ${
+              toast.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
+          >
+            {toast.message}
+          </p>
+        </div>
+      ) : null}
+
       <output className="sr-only" aria-live="polite">
         {asyncAnnounceMessage}
       </output>
@@ -177,16 +213,10 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
           id="message"
           name="message"
           value={message}
-          onChange={(event) => {
-            setMessage(event.target.value);
-            if (submitStatus !== "posting" && submitStatus !== "idle") {
-              setSubmitStatus("idle");
-              setStatusMessage(DEFAULT_STATUS_MESSAGE);
-            }
-          }}
+          onChange={(event) => setMessage(event.target.value)}
           required
           maxLength={MAX_GUESTBOOK_MESSAGE_LENGTH}
-          rows={4}
+          rows={3}
           className="ui-input mt-2.5 w-full bg-white/96 px-3 py-3 text-[0.92rem] leading-[1.62]"
           placeholder="루다에게 전하고 싶은 말을 적어주세요."
         />
@@ -197,17 +227,11 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
             {submitStatus === "posting" ? "등록 중…" : "남기기"}
           </button>
         </div>
-
-        <p className={`ui-status mt-2 ${statusTone}`} role={submitStatus === "error" ? "alert" : "status"}>
-          {statusMessage}
-        </p>
       </form>
 
       <div className="mt-3 flex items-center justify-between">
         <h3 className="text-[0.88rem] font-semibold text-[color:var(--color-ink)]">최근 덕담</h3>
-        <a href="#guestbook-comments" className="ui-btn-text px-0 text-[0.8rem]">
-          전체 보기
-        </a>
+        <span className="text-[0.76rem] font-medium text-[color:var(--color-muted)]">{messages.length}개</span>
       </div>
 
       {fetchError ? (
@@ -216,7 +240,7 @@ export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
         </p>
       ) : null}
 
-      <div id="guestbook-comments" className="mt-3 space-y-2.5" aria-live="polite">
+      <div id="guestbook-comments" className="mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1" aria-live="polite">
         {isLoading ? (
           <p className="ui-status ui-status-neutral rounded-[var(--radius-md)] px-3.5 py-3 text-[0.88rem]">
             덕담을 불러오는 중…

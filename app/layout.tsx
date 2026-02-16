@@ -1,18 +1,31 @@
 import type { Metadata } from "next";
-import { Gowun_Batang, Noto_Sans_KR } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const paperlogy = Noto_Sans_KR({
+const paperlogy = localFont({
   variable: "--font-paperlogy",
-  weight: ["400", "500", "700"],
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const gowunBatang = Gowun_Batang({
-  variable: "--font-gowun-batang",
-  weight: ["400", "700"],
-  subsets: ["latin"],
+  src: [
+    {
+      path: "../public/Paperlogy/Paperlogy-4Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/Paperlogy/Paperlogy-5Medium.ttf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../public/Paperlogy/Paperlogy-6SemiBold.ttf",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../public/Paperlogy/Paperlogy-7Bold.ttf",
+      weight: "700",
+      style: "normal",
+    },
+  ],
   display: "swap",
 });
 
@@ -30,7 +43,7 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${paperlogy.variable} ${gowunBatang.variable} page-base antialiased`}
+        className={`${paperlogy.variable} page-base antialiased`}
       >
         {children}
       </body>
