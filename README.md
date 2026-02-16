@@ -35,6 +35,9 @@ npm run build
 ```env
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+# 배포에서 NEXT_PUBLIC_*를 쓰기 어렵다면 서버 전용 키로도 동작
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
 # 선택: 서버 전용 권한 키
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_STORAGE_BUCKET=luda-photos
@@ -44,6 +47,32 @@ ADMIN_SESSION_SECRET=...
 ```
 
 DB 스키마는 `docs/db/guestbook.sql`을 사용하세요.
+
+## PWA + 웹푸시 알림 설정
+
+1. `docs/db/guestbook.sql`의 `web_push_subscriptions` 테이블 생성 SQL을 반영합니다.
+2. VAPID 키를 발급합니다.
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+3. 환경 변수를 추가합니다.
+
+```env
+# 클라이언트(구독용)
+NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY=...
+
+# 서버(발송용)
+WEB_PUSH_VAPID_PUBLIC_KEY=...
+WEB_PUSH_VAPID_PRIVATE_KEY=...
+WEB_PUSH_SUBJECT=mailto:you@example.com
+
+# 선택
+WEB_PUSH_SUBSCRIPTIONS_TABLE=web_push_subscriptions
+```
+
+`WEB_PUSH_VAPID_PUBLIC_KEY`에는 `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`와 동일한 값을 넣으면 됩니다.
 
 ## 배포
 

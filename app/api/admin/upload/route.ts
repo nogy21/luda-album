@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "@/lib/admin/session";
 import { createGalleryImageRecord } from "@/lib/gallery/repository";
 import type { PhotoVisibility } from "@/lib/gallery/types";
+import { notifyUploadedFamilyPhotos } from "@/lib/notifications/web-push";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024;
@@ -164,6 +165,16 @@ export async function POST(request: Request) {
       continue;
     }
 
+  }
+
+  const uploadedFamilyCount = uploaded.filter((item) => item.visibility === "family").length;
+
+  if (uploadedFamilyCount > 0) {
+    try {
+      await notifyUploadedFamilyPhotos(supabase, uploadedFamilyCount);
+    } catch {
+      // Keep upload success even if push broadcast fails.
+    }
   }
 
   return NextResponse.json({

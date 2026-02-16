@@ -36,3 +36,18 @@ create table if not exists public.photo_comments (
 
 create index if not exists photo_comments_photo_id_created_at_desc_idx
   on public.photo_comments (photo_id, created_at desc);
+
+create table if not exists public.web_push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  expiration_time bigint,
+  is_active boolean not null default true,
+  last_notified_at timestamptz,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists web_push_subscriptions_updated_at_desc_idx
+  on public.web_push_subscriptions (updated_at desc);

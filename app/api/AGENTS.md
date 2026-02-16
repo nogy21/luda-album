@@ -11,6 +11,7 @@ All HTTP contracts for public photos/guestbook and admin actions live here.
 | `GET/POST /api/guestbook`                 | `app/api/guestbook/route.ts`                 | Validation + Supabase fallback         |
 | `GET /api/photos`                         | `app/api/photos/route.ts`                    | Cursor paging + date filters + summary |
 | `GET /api/photos/highlights`              | `app/api/photos/highlights/route.ts`         | Featured/highlight feed                |
+| `POST/DELETE /api/notifications/subscribe`| `app/api/notifications/subscribe/route.ts`   | Web push subscription upsert/remove    |
 | `GET/POST /api/photos/[photoId]/comments` | `app/api/photos/[photoId]/comments/route.ts` | Per-photo comments                     |
 | `POST /api/admin/auth`                    | `app/api/admin/auth/route.ts`                | Admin login cookie issue               |
 | `GET /api/admin/session`                  | `app/api/admin/session/route.ts`             | Session check                          |
@@ -36,3 +37,4 @@ All HTTP contracts for public photos/guestbook and admin actions live here.
 - Validate query/body parsing and status codes.
 - Preserve cache headers on photos/highlights handlers.
 - Keep fallback path behavior explicitly tested or manually verified.
+- Keep web push routes resilient when VAPID env or Supabase is missing.

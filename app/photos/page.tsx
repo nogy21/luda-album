@@ -1,6 +1,7 @@
 import { AppShell, CoverCard } from "@/components/app-shell";
 import { GallerySection } from "@/components/gallery-section";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
+import { PushNotificationPanel } from "@/components/push-notification-panel";
 import {
   listPhotoHighlightsFromDatabase,
   listPhotoSummaryFromDatabase,
@@ -84,6 +85,7 @@ export default async function PhotosPage() {
   return (
     <AppShell>
       <CoverCard images={coverItems.map(mapPhotoItemToGalleryImage)} />
+      <PushNotificationPanel />
       <GallerySection
         initialSummary={initialSummary}
         initialHighlights={initialHighlights}

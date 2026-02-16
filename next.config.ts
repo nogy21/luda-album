@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const getSupabaseRemotePattern = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 
   if (!supabaseUrl) {
     return null;
