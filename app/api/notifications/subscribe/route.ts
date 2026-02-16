@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       {
         title: "루다 앨범",
         body: "알림 설정이 완료됐어요.",
-        icon: "/icons/icon-192.png",
+        icon: "/pwa/icon/192.png",
         badge: "/icons/badge-72.png",
         tag: "luda-album-subscribe",
         url: "/photos",

@@ -84,7 +84,7 @@ const buildUploadPushPayload = (uploadedCount: number): PushNotificationPayload 
       uploadedCount > 1
         ? `새 사진 ${uploadedCount}장이 올라왔어요.`
         : "새 사진이 올라왔어요.",
-    icon: "/icons/icon-192.png",
+    icon: "/pwa/icon/192.png",
     badge: "/icons/badge-72.png",
     tag: "luda-album-new-photo",
     url: "/photos",

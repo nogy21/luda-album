@@ -1,6 +1,19 @@
 import type { MetadataRoute } from "next";
 
-export default function manifest(): MetadataRoute.Manifest {
+import {
+  PWA_ICON_ROUTE_PATHS,
+  getPwaBrandingVersionQuery,
+  resolvePwaBranding,
+} from "@/lib/pwa/branding";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export const revalidate = 0;
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const supabase = createServerSupabaseClient();
+  const branding = await resolvePwaBranding(supabase);
+  const versionQuery = getPwaBrandingVersionQuery(branding.version);
+
   return {
     name: "Luda Album",
     short_name: "Luda",
@@ -14,23 +27,23 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/icons/icon-192.png",
+        src: `${PWA_ICON_ROUTE_PATHS.icon192}${versionQuery}`,
         sizes: "192x192",
         type: "image/png",
       },
       {
-        src: "/icons/icon-512.png",
+        src: `${PWA_ICON_ROUTE_PATHS.icon512}${versionQuery}`,
         sizes: "512x512",
         type: "image/png",
       },
       {
-        src: "/icons/maskable-512.png",
+        src: `${PWA_ICON_ROUTE_PATHS.maskable512}${versionQuery}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/icons/apple-touch-icon.png",
+        src: `${PWA_ICON_ROUTE_PATHS.appleTouch}${versionQuery}`,
         sizes: "180x180",
         type: "image/png",
       },

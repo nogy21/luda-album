@@ -35,6 +35,20 @@ const ensureServiceWorkerRegistration = async () => {
   return navigator.serviceWorker.register("/sw.js", { scope: "/" });
 };
 
+const isIosPlatform = (navigatorObject: Navigator) => {
+  const userAgent = navigatorObject.userAgent ?? "";
+  const platform = navigatorObject.platform ?? "";
+  const maxTouchPoints =
+    typeof navigatorObject.maxTouchPoints === "number"
+      ? navigatorObject.maxTouchPoints
+      : 0;
+
+  return (
+    /iPad|iPhone|iPod/i.test(userAgent) ||
+    (platform === "MacIntel" && maxTouchPoints > 1)
+  );
+};
+
 export function PushNotificationPanel() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
     "default",
@@ -44,12 +58,14 @@ export function PushNotificationPanel() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
+    setIsIos(isIosPlatform(window.navigator));
     const standaloneByMedia = window.matchMedia("(display-mode: standalone)").matches;
     const standaloneByNavigator = (window.navigator as NavigatorWithStandalone).standalone === true;
     setIsStandalone(standaloneByMedia || standaloneByNavigator);
@@ -94,8 +110,10 @@ export function PushNotificationPanel() {
     return supportsPushNotifications() && vapidPublicKey.length > 0;
   }, []);
 
+  const requiresIosInstall = isIos && !isStandalone;
   const hasInstallAction = !isStandalone && installPrompt !== null;
   const shouldShow =
+    requiresIosInstall ||
     hasInstallAction ||
     permission === "unsupported" ||
     permission === "denied" ||
@@ -252,7 +270,11 @@ export function PushNotificationPanel() {
           </button>
         ) : null}
 
-        {permission === "unsupported" ? (
+        {requiresIosInstall ? (
+          <p className="text-[0.8rem] text-[color:var(--color-muted)]">
+            iPhone/iPad에서는 먼저 홈 화면에 추가해야 알림을 켤 수 있어요.
+          </p>
+        ) : permission === "unsupported" ? (
           <p className="text-[0.8rem] text-[color:var(--color-muted)]">
             현재 브라우저는 웹 푸시를 지원하지 않아요.
           </p>
@@ -277,7 +299,13 @@ export function PushNotificationPanel() {
         )}
       </div>
 
-      {permission === "denied" ? (
+      {requiresIosInstall ? (
+        <p className="mt-2 text-[0.77rem] text-[color:var(--color-muted)]">
+          브라우저 공유 버튼(사파리/크롬) → 홈 화면에 추가 순서로 설치해 주세요.
+        </p>
+      ) : null}
+
+      {permission === "denied" && !requiresIosInstall ? (
         <p className="mt-2 text-[0.77rem] text-[color:var(--color-danger)]">
           브라우저 설정에서 알림 권한을 허용해야 푸시 알림을 받을 수 있어요.
         </p>
@@ -287,7 +315,7 @@ export function PushNotificationPanel() {
         <p className="mt-2 text-[0.77rem] text-[color:var(--color-muted)]">{statusMessage}</p>
       ) : null}
 
-      {!canEnablePush && permission !== "unsupported" ? (
+      {!canEnablePush && permission !== "unsupported" && !requiresIosInstall ? (
         <p className="mt-2 text-[0.77rem] text-[color:var(--color-muted)]">
           알림 설정값이 아직 배포 환경에 연결되지 않았어요.
         </p>

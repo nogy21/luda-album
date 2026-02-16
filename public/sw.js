@@ -13,7 +13,7 @@ self.addEventListener("push", (event) => {
   let payload = {
     title: fallbackTitle,
     body: fallbackBody,
-    icon: "/icons/icon-192.png",
+    icon: "/pwa/icon/192.png",
     badge: "/icons/badge-72.png",
     tag: "luda-album-update",
     url: "/photos",
