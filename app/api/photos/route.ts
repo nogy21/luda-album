@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { listE2EFixturePhotosPage } from "@/lib/gallery/e2e-fixtures";
 import { listPhotosPageFromDatabase } from "@/lib/gallery/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isE2EFixtureModeEnabled } from "@/lib/testing/e2e-fixture-mode";
 import type { PhotoListResponse } from "@/lib/gallery/types";
 
 const DEFAULT_LIMIT = 36;
@@ -76,7 +78,11 @@ export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
 
   if (!supabase) {
-    return NextResponse.json(buildEmptyResponse(), {
+    const payload = isE2EFixtureModeEnabled()
+      ? listE2EFixturePhotosPage({ cursor, limit, year, month, day })
+      : buildEmptyResponse();
+
+    return NextResponse.json(payload, {
       headers: {
         "Cache-Control": "s-maxage=60, stale-while-revalidate=600",
       },

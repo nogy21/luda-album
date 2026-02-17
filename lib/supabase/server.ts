@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { isE2EFixtureModeEnabled } from "@/lib/testing/e2e-fixture-mode";
+
 const getSupabaseEnv = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
@@ -14,6 +16,10 @@ const getSupabaseEnv = () => {
 };
 
 export const createServerSupabaseClient = () => {
+  if (isE2EFixtureModeEnabled()) {
+    return null;
+  }
+
   const env = getSupabaseEnv();
 
   if (!env) {

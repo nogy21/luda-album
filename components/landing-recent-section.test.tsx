@@ -49,7 +49,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   lockPageScrollMock.mockClear();
   unlockPageScrollMock.mockClear();
-  window.localStorage.clear();
 
   if (originalRequestFullscreen) {
     Object.defineProperty(HTMLElement.prototype, "requestFullscreen", originalRequestFullscreen);

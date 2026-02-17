@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { getE2EFixturePhotoSummary } from "@/lib/gallery/e2e-fixtures";
 import { listPhotoSummaryFromDatabase } from "@/lib/gallery/repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isE2EFixtureModeEnabled } from "@/lib/testing/e2e-fixture-mode";
 import type { PhotoSummaryResponse } from "@/lib/gallery/types";
 
 const buildEmptySummary = (): PhotoSummaryResponse => ({
@@ -13,7 +15,9 @@ export async function GET() {
   const supabase = createServerSupabaseClient();
 
   if (!supabase) {
-    return NextResponse.json(buildEmptySummary(), {
+    const payload = isE2EFixtureModeEnabled() ? getE2EFixturePhotoSummary() : buildEmptySummary();
+
+    return NextResponse.json(payload, {
       headers: {
         "Cache-Control": "s-maxage=60, stale-while-revalidate=600",
       },

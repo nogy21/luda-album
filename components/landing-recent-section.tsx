@@ -76,15 +76,12 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
   });
 
   const closeLightbox = useCallback(() => {
-    const restoreFocus = () => {
-      setLightboxDirection(0);
-      setLightboxIndex(null);
-      window.requestAnimationFrame(() => {
-        triggerRef.current?.focus();
-      });
-    };
-
-    void exitLightboxImmersive().finally(restoreFocus);
+    setLightboxDirection(0);
+    setLightboxIndex(null);
+    void exitLightboxImmersive();
+    window.requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
   }, [exitLightboxImmersive]);
 
   const dismissGestureHint = useCallback(() => {

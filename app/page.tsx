@@ -7,10 +7,13 @@ import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
 import { PushNotificationPanel } from "@/components/push-notification-panel";
 import { listPhotosPageFromDatabase } from "@/lib/gallery/repository";
 import type { PhotoItem } from "@/lib/gallery/types";
+import { listE2EFixturePhotosPage } from "@/lib/gallery/e2e-fixtures";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isE2EFixtureModeEnabled } from "@/lib/testing/e2e-fixture-mode";
 
 export default async function Home() {
   const supabase = createServerSupabaseClient();
+  const fixtureMode = isE2EFixtureModeEnabled();
   let items: PhotoItem[] = [];
 
   if (supabase) {
@@ -23,7 +26,13 @@ export default async function Home() {
       items = response.items;
     } catch (error) {
       void error;
+
+      if (fixtureMode) {
+        items = listE2EFixturePhotosPage({ limit: 48 }).items;
+      }
     }
+  } else if (fixtureMode) {
+    items = listE2EFixturePhotosPage({ limit: 48 }).items;
   }
 
   return (

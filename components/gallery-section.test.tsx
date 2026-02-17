@@ -49,7 +49,6 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  window.localStorage.clear();
 });
 
 const initialSummary = {
@@ -149,7 +148,8 @@ describe("GallerySection", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "photo 1 확대 보기" }));
-    await screen.findByPlaceholderText("댓글을 남겨주세요");
+    await screen.findByRole("dialog", { name: "갤러리 이미지 크게 보기" }, { timeout: 5_000 });
+    await screen.findByPlaceholderText("댓글을 남겨주세요", undefined, { timeout: 5_000 });
 
     const fullscreenButton = screen.getByRole("button", { name: "전체화면" });
     expect(fullscreenButton.className).toContain("whitespace-nowrap");

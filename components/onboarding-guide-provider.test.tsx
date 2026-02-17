@@ -40,40 +40,6 @@ describe("OnboardingGuideProvider", () => {
   beforeEach(() => {
     pathnameMock = "/";
     pushMock.mockReset();
-
-    const localStore = new Map<string, string>();
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: (key: string) => localStore.get(key) ?? null,
-        setItem: (key: string, value: string) => {
-          localStore.set(key, value);
-        },
-        removeItem: (key: string) => {
-          localStore.delete(key);
-        },
-        clear: () => {
-          localStore.clear();
-        },
-      },
-    });
-
-    const sessionStore = new Map<string, string>();
-    Object.defineProperty(window, "sessionStorage", {
-      configurable: true,
-      value: {
-        getItem: (key: string) => sessionStore.get(key) ?? null,
-        setItem: (key: string, value: string) => {
-          sessionStore.set(key, value);
-        },
-        removeItem: (key: string) => {
-          sessionStore.delete(key);
-        },
-        clear: () => {
-          sessionStore.clear();
-        },
-      },
-    });
   });
 
   it("auto-opens tutorial for first visit", async () => {

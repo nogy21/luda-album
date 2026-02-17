@@ -2,6 +2,10 @@ import { AppShell } from "@/components/app-shell";
 import { GallerySection } from "@/components/gallery-section";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
 import {
+  getE2EFixturePhotoSummary,
+  listE2EFixtureMonthPage,
+} from "@/lib/gallery/e2e-fixtures";
+import {
   listPhotoSummaryFromDatabase,
   listPhotosMonthPageFromDatabase,
 } from "@/lib/gallery/repository";
@@ -11,6 +15,7 @@ import type {
   PhotoSummaryResponse,
 } from "@/lib/gallery/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isE2EFixtureModeEnabled } from "@/lib/testing/e2e-fixture-mode";
 
 export const revalidate = 60;
 
@@ -28,6 +33,7 @@ const buildEmptySummary = (): PhotoSummaryResponse => ({
 
 export default async function PhotosPage() {
   const supabase = createServerSupabaseClient();
+  const fixtureMode = isE2EFixtureModeEnabled();
   let initialSummary = buildEmptySummary();
   let initialMonthPages: Record<string, PhotoMonthPageResponse> = {};
 
@@ -56,7 +62,36 @@ export default async function PhotosPage() {
       initialMonthPages = Object.fromEntries(monthPages.map((page) => [page.key, page]));
     } catch {
       // Keep empty initial state and rely on month-level retries in the client.
+      if (fixtureMode) {
+        const fixtureSummary = getE2EFixturePhotoSummary();
+        initialSummary = fixtureSummary;
+        const fixtureMonthPages = fixtureSummary.months
+          .slice(0, INITIAL_PRELOAD_MONTHS)
+          .map((month) =>
+            listE2EFixtureMonthPage({
+              year: month.year,
+              month: month.month,
+              limit: INITIAL_MONTH_PAGE_LIMIT,
+            }),
+          );
+        initialMonthPages = Object.fromEntries(
+          fixtureMonthPages.map((page) => [page.key, page]),
+        );
+      }
     }
+  } else if (fixtureMode) {
+    const fixtureSummary = getE2EFixturePhotoSummary();
+    initialSummary = fixtureSummary;
+    const fixtureMonthPages = fixtureSummary.months
+      .slice(0, INITIAL_PRELOAD_MONTHS)
+      .map((month) =>
+        listE2EFixtureMonthPage({
+          year: month.year,
+          month: month.month,
+          limit: INITIAL_MONTH_PAGE_LIMIT,
+        }),
+      );
+    initialMonthPages = Object.fromEntries(fixtureMonthPages.map((page) => [page.key, page]));
   }
 
   const preloadItems = Object.values(initialMonthPages)

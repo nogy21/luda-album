@@ -7,7 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\"",
+    "test:integration": "vitest run app/api",
+    "test:e2e": "bash ./scripts/run-playwright.sh",
+    "test:e2e:smoke": "bash ./scripts/run-playwright.sh e2e/smoke",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "npm run lint && npm run test:unit && npm run test:integration && npm run build && npm run test:e2e:smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
@@ -22,6 +28,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@playwright/test": "^1.56.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
