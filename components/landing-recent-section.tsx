@@ -14,6 +14,8 @@ type LandingRecentSectionProps = {
   items: PhotoItem[];
 };
 
+const IMMERSIVE_GESTURE_HINT_KEY = "luda:photo-viewer:gesture-hint:v1";
+
 const buildDayLink = (takenAt: string) => {
   const date = new Date(takenAt);
   return `/photos?year=${date.getUTCFullYear()}&month=${date.getUTCMonth() + 1}&day=${date.getUTCDate()}`;
@@ -27,6 +29,7 @@ const formatDateLabel = (takenAt: string) => {
 export function LandingRecentSection({ items }: LandingRecentSectionProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [lightboxDirection, setLightboxDirection] = useState<-1 | 0 | 1>(0);
+  const [isGestureHintDismissed, setIsGestureHintDismissed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const lightboxImmersiveRef = useRef<HTMLDivElement | null>(null);
   const reduceMotion = useReducedMotion();
@@ -84,6 +87,14 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
     void exitLightboxImmersive().finally(restoreFocus);
   }, [exitLightboxImmersive]);
 
+  const dismissGestureHint = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(IMMERSIVE_GESTURE_HINT_KEY, "seen");
+    }
+
+    setIsGestureHintDismissed(true);
+  }, []);
+
   useEffect(() => {
     if (!selectedImage) {
       return;
@@ -103,6 +114,12 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
     resetLightboxTransform();
   }, [isLightboxImmersive, resetLightboxTransform, selectedImage]);
+
+  const shouldShowGestureHint =
+    isLightboxImmersive &&
+    !isGestureHintDismissed &&
+    (typeof window === "undefined" ||
+      window.localStorage.getItem(IMMERSIVE_GESTURE_HINT_KEY) !== "seen");
 
   useEffect(() => {
     if (!selectedImage || previewItemCount < 2 || lightboxIndex === null || typeof window === "undefined") {
@@ -353,6 +370,25 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                         닫기
                       </button>
                     </div>
+                    {shouldShowGestureHint ? (
+                      <div className="absolute inset-x-0 top-[max(3.2rem,calc(env(safe-area-inset-top)+2.8rem))] flex justify-center px-2.5">
+                        <div className="max-w-[22rem] rounded-[0.9rem] border border-white/24 bg-black/66 px-3 py-2 text-white backdrop-blur-sm">
+                          <p className="text-[0.76rem] font-semibold">제스처 안내</p>
+                          <p className="mt-1 text-[0.72rem] leading-[1.45] text-white/90">
+                            좌우로 밀면 다음 사진, 더블탭/핀치로 확대할 수 있어요.
+                          </p>
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={dismissGestureHint}
+                              className="ui-btn photo-viewer-control min-h-9 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
+                            >
+                              확인
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                     {previewItemCount > 1 ? (
                       <div className="absolute inset-x-0 bottom-[max(0.62rem,env(safe-area-inset-bottom))] flex justify-center px-2.5">
                         <div className="photo-viewer-control-row flex max-w-full items-center gap-1.5 rounded-full border border-white/18 bg-black/58 px-2 py-1.5 backdrop-blur-sm">

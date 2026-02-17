@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LandingHero } from "./landing-hero";
 
+const openGuideMock = vi.fn();
+
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
     const { priority, ...rest } = props;
@@ -38,6 +40,12 @@ vi.mock("@/lib/ui/hero-intro", () => ({
   markHeroIntroSeen: () => {},
 }));
 
+vi.mock("@/components/onboarding-guide-provider", () => ({
+  useOnboardingGuide: () => ({
+    openGuide: openGuideMock,
+  }),
+}));
+
 const buildPhoto = (id: string) => ({
   id,
   src: `/${id}.jpg`,
@@ -60,5 +68,6 @@ describe("LandingHero", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("루다 하이라이트")).toBeInTheDocument();
     expect(screen.queryByText("오늘의 루다 하이라이트")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "사용 가이드" })).toBeInTheDocument();
   });
 });

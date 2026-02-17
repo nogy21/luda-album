@@ -12,6 +12,7 @@ import {
   markHeroIntroSeen,
   shouldRunHeroIntro,
 } from "@/lib/ui/hero-intro";
+import { useOnboardingGuide } from "@/components/onboarding-guide-provider";
 
 type LandingHeroProps = {
   items: PhotoItem[];
@@ -25,6 +26,7 @@ const buildDayLink = (takenAt: string) => {
 export function LandingHero({ items }: LandingHeroProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const highlightItems = useMemo(() => getLatestDateItems(items, 3), [items]);
+  const { openGuide } = useOnboardingGuide();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -95,6 +97,15 @@ export function LandingHero({ items }: LandingHeroProps) {
         >
           루다 하이라이트
         </h1>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={openGuide}
+            className="ui-btn ui-btn-secondary px-3"
+          >
+            사용 가이드
+          </button>
+        </div>
 
         <div
           className={`mt-3 grid gap-1.5 ${singleImage ? "grid-cols-1" : "grid-cols-3"}`}

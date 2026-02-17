@@ -49,6 +49,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   lockPageScrollMock.mockClear();
   unlockPageScrollMock.mockClear();
+  window.localStorage.clear();
 
   if (originalRequestFullscreen) {
     Object.defineProperty(HTMLElement.prototype, "requestFullscreen", originalRequestFullscreen);
@@ -148,5 +149,30 @@ describe("LandingRecentSection lightbox fullscreen", () => {
 
     expect(screen.queryByText("photo-3 caption")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "이동하기" })).not.toBeInTheDocument();
+  });
+
+  it("shows gesture hint once in immersive mode", () => {
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+
+    render(<LandingRecentSection items={[buildPhoto("photo-5"), buildPhoto("photo-6")]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "photo-5 caption 확대 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체화면" }));
+
+    expect(screen.getByText("제스처 안내")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    expect(screen.queryByText("제스처 안내")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "전체화면 종료" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체화면" }));
+
+    expect(screen.queryByText("제스처 안내")).not.toBeInTheDocument();
   });
 });

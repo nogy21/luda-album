@@ -49,6 +49,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 const initialSummary = {
@@ -154,6 +155,10 @@ describe("GallerySection", () => {
     expect(fullscreenButton.className).toContain("whitespace-nowrap");
 
     fireEvent.click(fullscreenButton);
+
+    expect(screen.getByText("제스처 안내")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    expect(screen.queryByText("제스처 안내")).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.queryByPlaceholderText("댓글을 남겨주세요")).not.toBeInTheDocument();

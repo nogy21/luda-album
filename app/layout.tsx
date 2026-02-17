@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 
+import { OnboardingGuideProvider } from "@/components/onboarding-guide-provider";
 import { PwaBootstrap } from "@/components/pwa-bootstrap";
 import { PWA_ICON_ROUTE_PATHS } from "@/lib/pwa/branding";
 
@@ -66,8 +67,10 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${paperlogy.variable} page-base antialiased`}
       >
-        <PwaBootstrap />
-        {children}
+        <OnboardingGuideProvider>
+          <PwaBootstrap />
+          {children}
+        </OnboardingGuideProvider>
       </body>
     </html>
   );

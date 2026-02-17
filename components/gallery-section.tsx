@@ -24,6 +24,7 @@ import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 const PAGE_LIMIT = 18;
 const INITIAL_PRELOAD_MONTHS = 2;
+const IMMERSIVE_GESTURE_HINT_KEY = "luda:photo-viewer:gesture-hint:v1";
 
 type GallerySectionProps = {
   initialSummary: PhotoSummaryResponse;
@@ -114,6 +115,7 @@ export function GallerySection({
   const [commentMessage, setCommentMessage] = useState("");
   const [commentStatus, setCommentStatus] = useState<CommentAsyncStatus>("idle");
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [isGestureHintDismissed, setIsGestureHintDismissed] = useState(false);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const lightboxImmersiveRef = useRef<HTMLDivElement | null>(null);
@@ -212,6 +214,14 @@ export function GallerySection({
 
     void exitLightboxImmersive().finally(restoreFocus);
   }, [exitLightboxImmersive]);
+
+  const dismissGestureHint = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(IMMERSIVE_GESTURE_HINT_KEY, "seen");
+    }
+
+    setIsGestureHintDismissed(true);
+  }, []);
 
   const moveLightbox = useCallback((step: number) => {
     setLightboxDirection(step > 0 ? 1 : -1);
@@ -488,6 +498,12 @@ export function GallerySection({
 
     resetLightboxTransform();
   }, [isLightboxImmersive, resetLightboxTransform, selectedImage]);
+
+  const shouldShowGestureHint =
+    isLightboxImmersive &&
+    !isGestureHintDismissed &&
+    (typeof window === "undefined" ||
+      window.localStorage.getItem(IMMERSIVE_GESTURE_HINT_KEY) !== "seen");
 
   useEffect(() => {
     if (!lightbox || !selectedImage || lightbox.items.length < 2 || typeof window === "undefined") {
@@ -996,6 +1012,25 @@ export function GallerySection({
                               닫기
                             </button>
                           </div>
+                          {shouldShowGestureHint ? (
+                            <div className="absolute inset-x-0 top-[max(3.2rem,calc(env(safe-area-inset-top)+2.8rem))] flex justify-center px-2.5">
+                              <div className="max-w-[22rem] rounded-[0.9rem] border border-white/24 bg-black/66 px-3 py-2 text-white backdrop-blur-sm">
+                                <p className="text-[0.76rem] font-semibold">제스처 안내</p>
+                                <p className="mt-1 text-[0.72rem] leading-[1.45] text-white/90">
+                                  좌우로 밀면 다음 사진, 더블탭/핀치로 확대할 수 있어요.
+                                </p>
+                                <div className="mt-2 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={dismissGestureHint}
+                                    className="ui-btn photo-viewer-control min-h-9 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
+                                  >
+                                    확인
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="absolute inset-x-0 bottom-[max(0.62rem,env(safe-area-inset-bottom))] flex justify-center px-2.5">
                             <div className="photo-viewer-control-row flex max-w-full items-center gap-1.5 rounded-full border border-white/18 bg-black/58 px-2 py-1.5 backdrop-blur-sm">
                               {lightbox && lightbox.items.length > 1 ? (
