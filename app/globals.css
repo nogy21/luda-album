@@ -32,9 +32,9 @@
   --space-6: 1.5rem;
   --space-7: 2rem;
   --space-8: 2.5rem;
-  --space-section-sm: 0.9rem;
-  --space-section-md: 1.25rem;
-  --space-section-lg: 1.75rem;
+  --space-section-sm: 0.72rem;
+  --space-section-md: 1.05rem;
+  --space-section-lg: 1.45rem;
   --text-display: clamp(1.44rem, 4.8vw, 1.92rem);
   --text-hero-title: clamp(1.28rem, 4.2vw, 1.68rem);
   --text-section-title: 1.08rem;
@@ -52,7 +52,7 @@
   --tap-min: 44px;
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-brand) 28%, transparent);
   --layout-max-width: 960px;
-  --layout-padding-inline: 1rem;
+  --layout-padding-inline: 0.84rem;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-nav-height: 4.58rem;
   --bottom-nav-edge-offset: max(0.56rem, var(--safe-area-bottom));
@@ -419,17 +419,25 @@ body {
 
 .route-transition-layer {
   will-change: opacity, transform;
+  transform-origin: center top;
+}
+
+.photo-viewer-immersive-target:fullscreen,
+.photo-viewer-immersive-target:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
 }
 
 @media (min-width: 640px) {
   :root {
-    --layout-padding-inline: 1.25rem;
+    --layout-padding-inline: 1rem;
   }
 }
 
 @media (min-width: 1024px) {
   :root {
-    --layout-padding-inline: 1.5rem;
+    --layout-padding-inline: 1.2rem;
   }
 }
 

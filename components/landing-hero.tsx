@@ -100,7 +100,7 @@ export function LandingHero({ items }: LandingHeroProps) {
           className={`mt-3 grid gap-1.5 ${singleImage ? "grid-cols-1" : "grid-cols-3"}`}
           data-landing-intro="gallery"
         >
-          {highlightItems.map((item) => (
+          {highlightItems.map((item, index) => (
             <Link
               key={item.id}
               href={buildDayLink(item.takenAt)}
@@ -112,7 +112,8 @@ export function LandingHero({ items }: LandingHeroProps) {
                 alt={item.alt}
                 width={1000}
                 height={1000}
-                priority
+                priority={index === 0}
+                quality={68}
                 sizes={singleImage ? "(max-width: 860px) 92vw, 760px" : "(max-width: 640px) 31vw, 220px"}
                 className={`motion-safe-scale w-full object-cover ${singleImage ? "aspect-[5/4]" : "aspect-square"}`}
               />

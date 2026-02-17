@@ -14,7 +14,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const INITIAL_MONTH_PAGE_LIMIT = 24;
+const INITIAL_MONTH_PAGE_LIMIT = 18;
 const INITIAL_PRELOAD_MONTHS = 2;
 
 const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {

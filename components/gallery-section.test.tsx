@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -48,6 +48,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 const initialSummary = {
@@ -121,5 +122,45 @@ describe("GallerySection", () => {
     expect(screen.queryByText("전체 앨범")).not.toBeInTheDocument();
     expect(screen.queryByText("이벤트별")).not.toBeInTheDocument();
     expect(screen.queryByText("랜덤 데이 미리보기")).not.toBeInTheDocument();
+  });
+
+  it("keeps comments in default lightbox and hides them in immersive mode", async () => {
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <GallerySection
+        initialSummary={initialSummary}
+        initialMonthPages={initialMonthPages}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "photo 1 확대 보기" }));
+    await screen.findByPlaceholderText("댓글을 남겨주세요");
+
+    const fullscreenButton = screen.getByRole("button", { name: "전체화면" });
+    expect(fullscreenButton.className).toContain("whitespace-nowrap");
+
+    fireEvent.click(fullscreenButton);
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText("댓글을 남겨주세요")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "전체화면 종료" }));
+
+    await screen.findByPlaceholderText("댓글을 남겨주세요");
   });
 });

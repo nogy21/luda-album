@@ -123,8 +123,30 @@ describe("LandingRecentSection lightbox fullscreen", () => {
     render(<LandingRecentSection items={[buildPhoto("photo-2")]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "photo-2 caption 확대 보기" }));
-    fireEvent.click(screen.getByRole("button", { name: "새 탭으로 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체화면" }));
 
-    expect(openSpy).toHaveBeenCalledWith("/photo-2.jpg", "_blank", "noopener,noreferrer");
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "전체화면 종료" })).toBeInTheDocument();
+  });
+
+  it("shows photo-only immersive mode when fullscreen is active", () => {
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
+
+    render(<LandingRecentSection items={[buildPhoto("photo-3"), buildPhoto("photo-4")]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "photo-3 caption 확대 보기" }));
+    expect(screen.getByText("photo-3 caption")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "전체화면" }));
+
+    expect(screen.queryByText("photo-3 caption")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "이동하기" })).not.toBeInTheDocument();
   });
 });

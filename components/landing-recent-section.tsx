@@ -6,14 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import type { PhotoItem } from "@/lib/gallery/types";
-import {
-  addFullscreenChangeListener,
-  canUseFullscreen,
-  exitFullscreen,
-  getFullscreenElement,
-  isFullscreenSupported,
-  requestFullscreen,
-} from "@/lib/ui/fullscreen";
+import { usePhotoGestures } from "@/lib/ui/photo-gestures";
+import { usePhotoViewerMode } from "@/lib/ui/photo-viewer-mode";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
 type LandingRecentSectionProps = {
@@ -32,62 +26,60 @@ const formatDateLabel = (takenAt: string) => {
 
 export function LandingRecentSection({ items }: LandingRecentSectionProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const lightboxFrameRef = useRef<HTMLDivElement | null>(null);
+  const lightboxImmersiveRef = useRef<HTMLDivElement | null>(null);
   const reduceMotion = useReducedMotion();
 
   const previewItems = items.slice(0, 3);
+  const previewItemCount = previewItems.length;
   const selectedImage = lightboxIndex !== null ? previewItems[lightboxIndex] ?? null : null;
+
+  const moveLightbox = useCallback(
+    (step: number) => {
+      setLightboxIndex((current) => {
+        if (current === null) {
+          return current;
+        }
+
+        return (current + step + previewItemCount) % previewItemCount;
+      });
+    },
+    [previewItemCount],
+  );
+
+  const {
+    isImmersive: isLightboxImmersive,
+    isOverlayVisible,
+    toggleImmersive: toggleLightboxFullscreen,
+    exitImmersive: exitLightboxImmersive,
+    showOverlayTemporarily,
+  } = usePhotoViewerMode({
+    frameRef: lightboxImmersiveRef,
+    isOpen: Boolean(selectedImage),
+    autoHideMs: 2200,
+  });
+
+  const {
+    isZoomed: isLightboxZoomed,
+    transformStyle: lightboxTransformStyle,
+    bind: lightboxGestureBind,
+    resetTransform: resetLightboxTransform,
+  } = usePhotoGestures({
+    enabled: Boolean(selectedImage && isLightboxImmersive),
+    onNavigatePrev: previewItemCount > 1 ? () => moveLightbox(-1) : undefined,
+    onNavigateNext: previewItemCount > 1 ? () => moveLightbox(1) : undefined,
+  });
 
   const closeLightbox = useCallback(() => {
     const restoreFocus = () => {
       setLightboxIndex(null);
-      setIsLightboxFullscreen(false);
       window.requestAnimationFrame(() => {
         triggerRef.current?.focus();
       });
     };
 
-    const target = lightboxFrameRef.current;
-
-    if (target && getFullscreenElement() === target) {
-      void exitFullscreen().catch(() => {}).finally(restoreFocus);
-      return;
-    }
-
-    restoreFocus();
-  }, []);
-
-  const moveLightbox = useCallback((step: number) => {
-    setLightboxIndex((current) => {
-      if (current === null) {
-        return current;
-      }
-
-      return (current + step + previewItems.length) % previewItems.length;
-    });
-  }, [previewItems.length]);
-
-  const toggleLightboxFullscreen = useCallback(() => {
-    if (!selectedImage) {
-      return;
-    }
-
-    const target = lightboxFrameRef.current;
-
-    if (!canUseFullscreen(target)) {
-      window.open(selectedImage.src, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    if (getFullscreenElement() === target) {
-      void exitFullscreen().catch(() => {});
-      return;
-    }
-
-    void requestFullscreen(target).catch(() => {});
-  }, [selectedImage]);
+    void exitLightboxImmersive().finally(restoreFocus);
+  }, [exitLightboxImmersive]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -106,16 +98,25 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
       return;
     }
 
-    const syncFullscreenState = () => {
-      const target = lightboxFrameRef.current;
-      const activeElement = getFullscreenElement();
-      setIsLightboxFullscreen(Boolean(target && activeElement === target));
-    };
+    resetLightboxTransform();
+  }, [isLightboxImmersive, resetLightboxTransform, selectedImage]);
 
-    syncFullscreenState();
+  useEffect(() => {
+    if (!selectedImage || previewItemCount < 2 || lightboxIndex === null || typeof window === "undefined") {
+      return;
+    }
 
-    return addFullscreenChangeListener(syncFullscreenState);
-  }, [selectedImage]);
+    const nextItem = previewItems[(lightboxIndex + 1) % previewItemCount];
+    const prevItem = previewItems[(lightboxIndex - 1 + previewItemCount) % previewItemCount];
+    const preloadTargets = [nextItem?.src, prevItem?.src].filter(
+      (value): value is string => Boolean(value),
+    );
+
+    for (const target of preloadTargets) {
+      const preloader = new window.Image();
+      preloader.src = target;
+    }
+  }, [lightboxIndex, previewItemCount, previewItems, selectedImage]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -124,11 +125,9 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        const target = lightboxFrameRef.current;
-
-        if (target && getFullscreenElement() === target) {
+        if (isLightboxImmersive) {
           event.preventDefault();
-          void exitFullscreen().catch(() => {});
+          void exitLightboxImmersive();
           return;
         }
 
@@ -146,7 +145,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
       if (event.key.toLowerCase() === "f") {
         event.preventDefault();
-        toggleLightboxFullscreen();
+        void toggleLightboxFullscreen();
       }
     };
 
@@ -155,13 +154,18 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedImage, closeLightbox, moveLightbox, toggleLightboxFullscreen]);
+  }, [
+    closeLightbox,
+    exitLightboxImmersive,
+    isLightboxImmersive,
+    moveLightbox,
+    selectedImage,
+    toggleLightboxFullscreen,
+  ]);
 
   if (previewItems.length === 0) {
     return null;
   }
-
-  const supportsLightboxFullscreen = selectedImage ? isFullscreenSupported() : false;
 
   return (
     <section className="layout-container mt-[var(--space-section-sm)]">
@@ -190,6 +194,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                 alt={item.alt}
                 width={280}
                 height={280}
+                quality={66}
                 sizes="(max-width: 640px) 24vw, 180px"
                 className="motion-safe-scale aspect-square w-full object-cover"
               />
@@ -201,7 +206,11 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
       <AnimatePresence>
         {selectedImage ? (
           <motion.div
-            className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/86 p-3"
+            className={`fixed inset-0 z-[var(--z-overlay)] flex bg-black/90 ${
+              isLightboxImmersive
+                ? "items-stretch justify-center p-0"
+                : "items-center justify-center p-2 sm:p-3"
+            }`}
             role="dialog"
             aria-modal="true"
             aria-label="요즘 루다 사진"
@@ -211,76 +220,180 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
             transition={{ duration: reduceMotion ? 0 : 0.18, ease: "easeOut" }}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
+                if (isLightboxImmersive) {
+                  showOverlayTemporarily();
+                  return;
+                }
+
                 closeLightbox();
               }
             }}
           >
             <motion.div
-              ref={lightboxFrameRef}
-              className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
+              className={
+                isLightboxImmersive
+                  ? "relative h-full w-full overflow-hidden bg-black"
+                  : "w-full max-w-3xl overflow-hidden rounded-[1rem] border border-white/10 bg-black"
+              }
               initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8, scale: 0.985 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6, scale: 0.985 }}
               transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
             >
-              <Image
-                src={selectedImage.src}
-                alt={selectedImage.alt}
-                width={1200}
-                height={1400}
-                sizes="(max-width: 860px) 92vw, 760px"
-                className="max-h-[78vh] w-full object-contain"
-                priority
-              />
-              <div className="space-y-2.5 border-t border-white/10 bg-black/90 px-3 py-3">
-                <div>
-                  <p className="text-[0.88rem] font-semibold text-white/96">{selectedImage.caption}</p>
-                  <p className="text-[0.73rem] text-white/74">{formatDateLabel(selectedImage.takenAt)}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={buildDayLink(selectedImage.takenAt)} className="ui-btn ui-btn-primary px-4">
-                    이동하기
-                  </Link>
-                  {previewItems.length > 1 ? (
-                    <>
+              <div
+                ref={lightboxImmersiveRef}
+                className={`photo-viewer-immersive-target relative bg-black ${
+                  isLightboxImmersive ? "h-full w-full touch-none" : "w-full"
+                }`}
+                onPointerDown={(event) => {
+                  if (isLightboxImmersive) {
+                    showOverlayTemporarily();
+                    lightboxGestureBind.onPointerDown(event);
+                  }
+                }}
+                onPointerMove={(event) => {
+                  if (isLightboxImmersive) {
+                    showOverlayTemporarily();
+                    lightboxGestureBind.onPointerMove(event);
+                  }
+                }}
+                onPointerUp={(event) => {
+                  if (isLightboxImmersive) {
+                    lightboxGestureBind.onPointerUp(event);
+                  }
+                }}
+                onPointerCancel={(event) => {
+                  if (isLightboxImmersive) {
+                    lightboxGestureBind.onPointerCancel(event);
+                  }
+                }}
+                onDoubleClick={(event) => {
+                  if (isLightboxImmersive) {
+                    lightboxGestureBind.onDoubleClick(event);
+                  }
+                }}
+              >
+                <Image
+                  src={selectedImage.src}
+                  alt={selectedImage.alt}
+                  width={1200}
+                  height={1400}
+                  sizes={isLightboxImmersive ? "100vw" : "(max-width: 860px) 92vw, 760px"}
+                  className={`select-none object-contain ${
+                    isLightboxImmersive ? "h-full w-full" : "max-h-[78vh] w-full"
+                  }`}
+                  quality={82}
+                  fetchPriority="high"
+                  style={isLightboxImmersive ? lightboxTransformStyle : undefined}
+                  draggable={false}
+                  priority
+                />
+
+                {isLightboxImmersive ? (
+                  <div
+                    className={`absolute inset-0 transition-opacity duration-200 ${
+                      isOverlayVisible ? "opacity-100" : "pointer-events-none opacity-0"
+                    }`}
+                  >
+                    <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 px-3 py-[max(0.75rem,env(safe-area-inset-top))]">
                       <button
                         type="button"
-                        onClick={() => moveLightbox(-1)}
-                        className="ui-btn border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
-                        aria-label="이전 사진"
+                        onClick={() => void toggleLightboxFullscreen()}
+                        className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
                       >
-                        이전
+                        전체화면 종료
                       </button>
                       <button
                         type="button"
-                        onClick={() => moveLightbox(1)}
-                        className="ui-btn border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
-                        aria-label="다음 사진"
+                        onClick={closeLightbox}
+                        className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
                       >
-                        다음
+                        닫기
                       </button>
-                    </>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={toggleLightboxFullscreen}
-                    className="ui-btn border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
-                  >
-                    {isLightboxFullscreen
-                      ? "전체화면 종료"
-                      : supportsLightboxFullscreen
-                        ? "전체화면"
-                        : "새 탭으로 보기"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeLightbox}
-                    className="ui-btn border-white/26 bg-white/10 px-4 text-white hover:bg-white/16"
-                  >
-                    닫기
-                  </button>
-                </div>
+                    </div>
+                    {previewItemCount > 1 ? (
+                      <div className="absolute inset-x-0 bottom-[max(0.7rem,env(safe-area-inset-bottom))] flex justify-center px-3">
+                        <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-white/18 bg-black/58 px-2 py-2 backdrop-blur-sm">
+                          <button
+                            type="button"
+                            onClick={() => moveLightbox(-1)}
+                            className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                            aria-label="이전 사진"
+                          >
+                            이전
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveLightbox(1)}
+                            className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                            aria-label="다음 사진"
+                          >
+                            다음
+                          </button>
+                          {isLightboxZoomed ? (
+                            <span className="shrink-0 whitespace-nowrap px-2 text-[0.7rem] font-semibold text-white/84">
+                              확대됨
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
+
+              {!isLightboxImmersive ? (
+                <div className="space-y-2 border-t border-white/10 bg-black/90 px-2.5 py-2.5">
+                  <div>
+                    <p className="line-clamp-1 text-[0.86rem] font-semibold text-white/96">
+                      {selectedImage.caption}
+                    </p>
+                    <p className="text-[0.73rem] text-white/74">{formatDateLabel(selectedImage.takenAt)}</p>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
+                    <Link
+                      href={buildDayLink(selectedImage.takenAt)}
+                      className="ui-btn ui-btn-primary shrink-0 whitespace-nowrap px-3"
+                    >
+                      이동하기
+                    </Link>
+                    {previewItemCount > 1 ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => moveLightbox(-1)}
+                          className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                          aria-label="이전 사진"
+                        >
+                          이전
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveLightbox(1)}
+                          className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                          aria-label="다음 사진"
+                        >
+                          다음
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void toggleLightboxFullscreen()}
+                      className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                    >
+                      전체화면
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeLightbox}
+                      className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </motion.div>
           </motion.div>
         ) : null}

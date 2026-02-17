@@ -18,17 +18,11 @@ import type {
   PhotoSummaryResponse,
 } from "@/lib/gallery/types";
 import { getPhotoTags } from "@/lib/gallery/tags";
-import {
-  addFullscreenChangeListener,
-  canUseFullscreen,
-  exitFullscreen,
-  getFullscreenElement,
-  isFullscreenSupported,
-  requestFullscreen,
-} from "@/lib/ui/fullscreen";
+import { usePhotoGestures } from "@/lib/ui/photo-gestures";
+import { usePhotoViewerMode } from "@/lib/ui/photo-viewer-mode";
 import { lockPageScroll, unlockPageScroll } from "@/lib/ui/scroll-lock";
 
-const PAGE_LIMIT = 24;
+const PAGE_LIMIT = 18;
 const INITIAL_PRELOAD_MONTHS = 2;
 
 type GallerySectionProps = {
@@ -112,7 +106,6 @@ export function GallerySection({
   );
   const [activeEventName, setActiveEventName] = useState("전체");
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
-  const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
   const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
     {},
   );
@@ -122,7 +115,7 @@ export function GallerySection({
   const [commentError, setCommentError] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const lightboxFrameRef = useRef<HTMLDivElement | null>(null);
+  const lightboxImmersiveRef = useRef<HTMLDivElement | null>(null);
   const monthStateMapRef = useRef<Record<string, MonthBucketState>>(monthStateMap);
   const monthSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const monthSentinelRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -195,24 +188,28 @@ export function GallerySection({
     [],
   );
 
+  const {
+    isImmersive: isLightboxImmersive,
+    isOverlayVisible,
+    toggleImmersive: toggleLightboxFullscreen,
+    exitImmersive: exitLightboxImmersive,
+    showOverlayTemporarily,
+  } = usePhotoViewerMode({
+    frameRef: lightboxImmersiveRef,
+    isOpen: Boolean(lightbox),
+    autoHideMs: 2200,
+  });
+
   const closeLightbox = useCallback(() => {
     const restoreFocus = () => {
       setLightbox(null);
-      setIsLightboxFullscreen(false);
       window.requestAnimationFrame(() => {
         triggerRef.current?.focus();
       });
     };
 
-    const target = lightboxFrameRef.current;
-
-    if (target && getFullscreenElement() === target) {
-      void exitFullscreen().catch(() => {}).finally(restoreFocus);
-      return;
-    }
-
-    restoreFocus();
-  }, []);
+    void exitLightboxImmersive().finally(restoreFocus);
+  }, [exitLightboxImmersive]);
 
   const moveLightbox = useCallback((step: number) => {
     setLightbox((current) => {
@@ -227,25 +224,12 @@ export function GallerySection({
     });
   }, []);
 
-  const toggleLightboxFullscreen = useCallback(() => {
-    if (!selectedImage) {
-      return;
-    }
-
-    const target = lightboxFrameRef.current;
-
-    if (!canUseFullscreen(target)) {
-      window.open(selectedImage.src, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    if (getFullscreenElement() === target) {
-      void exitFullscreen().catch(() => {});
-      return;
-    }
-
-    void requestFullscreen(target).catch(() => {});
-  }, [selectedImage]);
+  const { isZoomed: isLightboxZoomed, transformStyle: lightboxTransformStyle, bind: lightboxGestureBind, resetTransform: resetLightboxTransform } =
+    usePhotoGestures({
+      enabled: Boolean(selectedImage && isLightboxImmersive),
+      onNavigatePrev: lightbox && lightbox.items.length > 1 ? () => moveLightbox(-1) : undefined,
+      onNavigateNext: lightbox && lightbox.items.length > 1 ? () => moveLightbox(1) : undefined,
+    });
 
   const loadMonthPage = useCallback(
     async (monthKey: string) => {
@@ -495,20 +479,29 @@ export function GallerySection({
   }, [lightbox]);
 
   useEffect(() => {
-    if (!lightbox) {
+    if (!selectedImage) {
       return;
     }
 
-    const syncFullscreenState = () => {
-      const target = lightboxFrameRef.current;
-      const activeElement = getFullscreenElement();
-      setIsLightboxFullscreen(Boolean(target && activeElement === target));
-    };
+    resetLightboxTransform();
+  }, [isLightboxImmersive, resetLightboxTransform, selectedImage]);
 
-    syncFullscreenState();
+  useEffect(() => {
+    if (!lightbox || !selectedImage || lightbox.items.length < 2 || typeof window === "undefined") {
+      return;
+    }
 
-    return addFullscreenChangeListener(syncFullscreenState);
-  }, [lightbox]);
+    const nextItem = lightbox.items[(lightbox.index + 1) % lightbox.items.length];
+    const prevItem = lightbox.items[(lightbox.index - 1 + lightbox.items.length) % lightbox.items.length];
+    const preloadTargets = [nextItem?.src, prevItem?.src].filter(
+      (value): value is string => Boolean(value),
+    );
+
+    for (const target of preloadTargets) {
+      const preloader = new window.Image();
+      preloader.src = target;
+    }
+  }, [lightbox, selectedImage]);
 
   useEffect(() => {
     if (!lightbox) {
@@ -517,11 +510,9 @@ export function GallerySection({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        const target = lightboxFrameRef.current;
-
-        if (target && getFullscreenElement() === target) {
+        if (isLightboxImmersive) {
           event.preventDefault();
-          void exitFullscreen().catch(() => {});
+          void exitLightboxImmersive();
           return;
         }
 
@@ -539,7 +530,7 @@ export function GallerySection({
 
       if (event.key.toLowerCase() === "f") {
         event.preventDefault();
-        toggleLightboxFullscreen();
+        void toggleLightboxFullscreen();
       }
     };
 
@@ -548,7 +539,14 @@ export function GallerySection({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [lightbox, closeLightbox, moveLightbox, toggleLightboxFullscreen]);
+  }, [
+    closeLightbox,
+    exitLightboxImmersive,
+    isLightboxImmersive,
+    lightbox,
+    moveLightbox,
+    toggleLightboxFullscreen,
+  ]);
 
   const loadPhotoComments = useCallback(async (photoId: string) => {
     setCommentStatus("loading");
@@ -673,7 +671,6 @@ export function GallerySection({
     summary.months[0] ??
     null;
   const portalRoot = typeof document !== "undefined" ? document.body : null;
-  const supportsLightboxFullscreen = selectedImage ? isFullscreenSupported() : false;
 
   return (
     <>
@@ -775,6 +772,7 @@ export function GallerySection({
                           alt={image.alt}
                           width={420}
                           height={560}
+                          quality={64}
                           sizes="(max-width: 639px) 33vw, (max-width: 1023px) 25vw, 18vw"
                           className="motion-safe-scale aspect-square w-full object-cover"
                         />
@@ -851,7 +849,11 @@ export function GallerySection({
               {selectedImage ? (
                 <motion.div
                   key={selectedImage.id}
-                  className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/86 p-3 backdrop-blur-[2px]"
+                  className={`fixed inset-0 z-[var(--z-overlay)] flex bg-black/90 ${
+                    isLightboxImmersive
+                      ? "items-stretch justify-center p-0"
+                      : "items-center justify-center p-2 sm:p-3 backdrop-blur-[2px]"
+                  }`}
                   role="dialog"
                   aria-modal="true"
                   aria-label="갤러리 이미지 크게 보기"
@@ -861,165 +863,266 @@ export function GallerySection({
                   transition={{ duration: reduceMotion ? 0 : 0.18, ease: "easeOut" }}
                   onMouseDown={(event) => {
                     if (event.target === event.currentTarget) {
+                      if (isLightboxImmersive) {
+                        showOverlayTemporarily();
+                        return;
+                      }
+
                       closeLightbox();
                     }
                   }}
                 >
                   <motion.div
-                    ref={lightboxFrameRef}
-                    className="w-full max-w-3xl overflow-hidden rounded-[1.2rem] border border-white/10 bg-black"
+                    className={
+                      isLightboxImmersive
+                        ? "relative h-full w-full overflow-hidden bg-black"
+                        : "w-full max-w-3xl overflow-hidden rounded-[1rem] border border-white/10 bg-black"
+                    }
                     initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8, scale: 0.985 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6, scale: 0.985 }}
                     transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
                   >
-                    <Image
-                      src={selectedImage.src}
-                      alt={selectedImage.alt}
-                      width={1100}
-                      height={1300}
-                      sizes="(max-width: 768px) 92vw, 760px"
-                      className="max-h-[80vh] w-full object-contain"
-                      priority
-                    />
+                    <div
+                      ref={lightboxImmersiveRef}
+                      className={`photo-viewer-immersive-target relative bg-black ${
+                        isLightboxImmersive ? "h-full w-full touch-none" : "w-full"
+                      }`}
+                      onPointerDown={(event) => {
+                        if (isLightboxImmersive) {
+                          showOverlayTemporarily();
+                          lightboxGestureBind.onPointerDown(event);
+                        }
+                      }}
+                      onPointerMove={(event) => {
+                        if (isLightboxImmersive) {
+                          showOverlayTemporarily();
+                          lightboxGestureBind.onPointerMove(event);
+                        }
+                      }}
+                      onPointerUp={(event) => {
+                        if (isLightboxImmersive) {
+                          lightboxGestureBind.onPointerUp(event);
+                        }
+                      }}
+                      onPointerCancel={(event) => {
+                        if (isLightboxImmersive) {
+                          lightboxGestureBind.onPointerCancel(event);
+                        }
+                      }}
+                      onDoubleClick={(event) => {
+                        if (isLightboxImmersive) {
+                          lightboxGestureBind.onDoubleClick(event);
+                        }
+                      }}
+                    >
+                      <Image
+                        src={selectedImage.src}
+                        alt={selectedImage.alt}
+                        width={1100}
+                        height={1300}
+                        sizes={isLightboxImmersive ? "100vw" : "(max-width: 768px) 92vw, 760px"}
+                        className={`select-none object-contain ${
+                          isLightboxImmersive ? "h-full w-full" : "max-h-[80vh] w-full"
+                        }`}
+                        quality={82}
+                        fetchPriority="high"
+                        style={isLightboxImmersive ? lightboxTransformStyle : undefined}
+                        draggable={false}
+                        priority
+                      />
 
-                    <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-3 py-2 text-white">
-                      <div>
-                        <p className="line-clamp-1 text-sm font-semibold text-white/95">
-                          {selectedImage.caption}
-                        </p>
-                        <p className="text-[0.72rem] text-white/70">
-                          {formatDateLabel(selectedImage.takenAt)}
-                        </p>
-                        <p className="text-[0.68rem] text-white/60">
-                          {getPhotoTags(selectedImage).join(", ")}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {lightbox && lightbox.items.length > 1 ? (
-                          <>
+                      {isLightboxImmersive ? (
+                        <div
+                          className={`absolute inset-0 transition-opacity duration-200 ${
+                            isOverlayVisible ? "opacity-100" : "pointer-events-none opacity-0"
+                          }`}
+                        >
+                          <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 px-3 py-[max(0.75rem,env(safe-area-inset-top))]">
                             <button
                               type="button"
-                              onClick={() => moveLightbox(-1)}
-                              className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                              aria-label="이전 사진"
+                              onClick={() => void toggleLightboxFullscreen()}
+                              className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
                             >
-                              ‹
+                              전체화면 종료
                             </button>
                             <button
                               type="button"
-                              onClick={() => moveLightbox(1)}
-                              className="min-h-11 min-w-11 rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
-                              aria-label="다음 사진"
+                              onClick={closeLightbox}
+                              className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
                             >
-                              ›
+                              닫기
                             </button>
-                          </>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={toggleLightboxFullscreen}
-                          className="min-h-11 rounded-full bg-white/20 px-3 text-xs font-semibold text-white"
-                        >
-                          {isLightboxFullscreen
-                            ? "전체화면 종료"
-                            : supportsLightboxFullscreen
-                              ? "전체화면"
-                              : "새 탭으로 보기"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={closeLightbox}
-                          className="min-h-11 rounded-full bg-white/20 px-4 text-sm font-semibold text-white"
-                        >
-                          닫기
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-white/10 bg-black/95 px-3 py-3 text-white">
-                      <form
-                        className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
-                        onSubmit={handleSubmitComment}
-                      >
-                        <label htmlFor="photo-comment-message" className="sr-only">
-                          댓글 내용
-                        </label>
-                        <textarea
-                          id="photo-comment-message"
-                          value={commentMessage}
-                          onChange={(event) => {
-                            setCommentMessage(event.target.value);
-                            if (commentError) {
-                              setCommentError(null);
-                            }
-                          }}
-                          placeholder="댓글을 남겨주세요"
-                          className="min-h-[4.2rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2.5 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                          maxLength={MAX_PHOTO_COMMENT_LENGTH}
-                        />
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <label htmlFor="photo-comment-nickname" className="sr-only">
-                            닉네임
-                          </label>
-                          <input
-                            id="photo-comment-nickname"
-                            type="text"
-                            value={commentNickname}
-                            onChange={(event) => setCommentNickname(event.target.value)}
-                            placeholder="닉네임(선택)"
-                            className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                            maxLength={24}
-                          />
-                          <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
-                          <button
-                            type="submit"
-                            disabled={commentStatus === "posting"}
-                            className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
-                          >
-                            {commentStatus === "posting" ? "남기는 중…" : "남기기"}
-                          </button>
+                          </div>
+                          <div className="absolute inset-x-0 bottom-[max(0.7rem,env(safe-area-inset-bottom))] flex justify-center px-3">
+                            <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-white/18 bg-black/58 px-2 py-2 backdrop-blur-sm">
+                              {lightbox && lightbox.items.length > 1 ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveLightbox(-1)}
+                                    className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                                    aria-label="이전 사진"
+                                  >
+                                    이전
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveLightbox(1)}
+                                    className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                                    aria-label="다음 사진"
+                                  >
+                                    다음
+                                  </button>
+                                </>
+                              ) : null}
+                              {isLightboxZoomed ? (
+                                <span className="shrink-0 whitespace-nowrap px-2 text-[0.7rem] font-semibold text-white/84">
+                                  확대됨
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
-                      </form>
-
-                      <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
-                        <span>{selectedPhotoComments.length}개 댓글</span>
-                        <span>최신순</span>
-                      </div>
-
-                      {commentError ? (
-                        <p className="mt-1 rounded-[0.72rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
-                          {commentError}
-                        </p>
                       ) : null}
-
-                      <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto pr-1">
-                        {commentStatus === "loading" && selectedPhotoComments.length === 0 ? (
-                          <p className="text-[0.74rem] text-white/70">댓글을 불러오는 중…</p>
-                        ) : null}
-                        {commentStatus !== "loading" && selectedPhotoComments.length === 0 ? (
-                          <p className="text-[0.74rem] text-white/70">첫 댓글을 남겨주세요.</p>
-                        ) : null}
-                        {selectedPhotoComments.map((comment) => (
-                          <article
-                            key={comment.id}
-                            className="rounded-[0.78rem] border border-white/10 bg-white/[0.06] px-2.5 py-2"
-                          >
-                            <header className="flex items-center justify-between gap-2">
-                              <strong className="text-[0.74rem] font-semibold text-white/92">
-                                {comment.nickname}
-                              </strong>
-                              <time className="text-[0.66rem] text-white/60">
-                                {commentDateFormatter.format(new Date(comment.created_at))}
-                              </time>
-                            </header>
-                            <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/88">
-                              {comment.message}
-                            </p>
-                          </article>
-                        ))}
-                      </div>
                     </div>
+
+                    {!isLightboxImmersive ? (
+                      <>
+                        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-2.5 py-2 text-white">
+                          <div>
+                            <p className="line-clamp-1 text-[0.86rem] font-semibold text-white/95">
+                              {selectedImage.caption}
+                            </p>
+                            <p className="text-[0.72rem] text-white/70">
+                              {formatDateLabel(selectedImage.takenAt)}
+                            </p>
+                            <p className="text-[0.68rem] text-white/60">
+                              {getPhotoTags(selectedImage).join(", ")}
+                            </p>
+                          </div>
+                          <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
+                            {lightbox && lightbox.items.length > 1 ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => moveLightbox(-1)}
+                                  className="min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                                  aria-label="이전 사진"
+                                >
+                                  ‹
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveLightbox(1)}
+                                  className="min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                                  aria-label="다음 사진"
+                                >
+                                  ›
+                                </button>
+                              </>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void toggleLightboxFullscreen()}
+                              className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-2.5 text-xs font-semibold text-white"
+                            >
+                              전체화면
+                            </button>
+                            <button
+                              type="button"
+                              onClick={closeLightbox}
+                              className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-3 text-sm font-semibold text-white"
+                            >
+                              닫기
+                            </button>
+                          </div>
+                        </div>
+                        <div className="border-t border-white/10 bg-black/95 px-2.5 py-2.5 text-white">
+                          <form
+                            className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
+                            onSubmit={handleSubmitComment}
+                          >
+                            <label htmlFor="photo-comment-message" className="sr-only">
+                              댓글 내용
+                            </label>
+                            <textarea
+                              id="photo-comment-message"
+                              value={commentMessage}
+                              onChange={(event) => {
+                                setCommentMessage(event.target.value);
+                                if (commentError) {
+                                  setCommentError(null);
+                                }
+                              }}
+                              placeholder="댓글을 남겨주세요"
+                              className="min-h-[3.4rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                              maxLength={MAX_PHOTO_COMMENT_LENGTH}
+                            />
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <label htmlFor="photo-comment-nickname" className="sr-only">
+                                닉네임
+                              </label>
+                              <input
+                                id="photo-comment-nickname"
+                                type="text"
+                                value={commentNickname}
+                                onChange={(event) => setCommentNickname(event.target.value)}
+                                placeholder="닉네임(선택)"
+                                className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                                maxLength={24}
+                              />
+                              <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
+                              <button
+                                type="submit"
+                                disabled={commentStatus === "posting"}
+                                className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
+                              >
+                                {commentStatus === "posting" ? "남기는 중…" : "남기기"}
+                              </button>
+                            </div>
+                          </form>
+
+                          <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
+                            <span>{selectedPhotoComments.length}개 댓글</span>
+                            <span>최신순</span>
+                          </div>
+
+                          {commentError ? (
+                            <p className="mt-1 rounded-[0.72rem] border border-rose-200/60 bg-rose-500/10 px-2.5 py-1.5 text-[0.72rem] text-rose-100">
+                              {commentError}
+                            </p>
+                          ) : null}
+
+                          <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto pr-1">
+                            {commentStatus === "loading" && selectedPhotoComments.length === 0 ? (
+                              <p className="text-[0.74rem] text-white/70">댓글을 불러오는 중…</p>
+                            ) : null}
+                            {commentStatus !== "loading" && selectedPhotoComments.length === 0 ? (
+                              <p className="text-[0.74rem] text-white/70">첫 댓글을 남겨주세요.</p>
+                            ) : null}
+                            {selectedPhotoComments.map((comment) => (
+                              <article
+                                key={comment.id}
+                                className="rounded-[0.78rem] border border-white/10 bg-white/[0.06] px-2.5 py-2"
+                              >
+                                <header className="flex items-center justify-between gap-2">
+                                  <strong className="text-[0.74rem] font-semibold text-white/92">
+                                    {comment.nickname}
+                                  </strong>
+                                  <time className="text-[0.66rem] text-white/60">
+                                    {commentDateFormatter.format(new Date(comment.created_at))}
+                                  </time>
+                                </header>
+                                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-[1.45] text-white/88">
+                                  {comment.message}
+                                </p>
+                              </article>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </motion.div>
                 </motion.div>
               ) : null}
