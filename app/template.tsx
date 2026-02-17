@@ -16,10 +16,10 @@ export default function RootTemplate({ children }: RootTemplateProps) {
       <motion.div
         key={pathname}
         className="route-transition-layer"
-        initial={reduceMotion ? false : { opacity: 0, y: 18, scale: 0.988, filter: "blur(6px)" }}
+        initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.982, filter: "blur(10px)" }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-        exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -10, scale: 0.994, filter: "blur(4px)" }}
-        transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+        exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -14, scale: 0.99, filter: "blur(6px)" }}
+        transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
       >
         {children}
       </motion.div>

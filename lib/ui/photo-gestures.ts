@@ -89,6 +89,7 @@ export function usePhotoGestures({
 }: GestureOptions): GestureResult {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
+  const [isGestureActive, setIsGestureActive] = useState(false);
 
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
@@ -115,6 +116,7 @@ export function usePhotoGestures({
   const resetTransform = useCallback(() => {
     setScale(1);
     setOffset({ x: 0, y: 0 });
+    setIsGestureActive(false);
     scaleRef.current = 1;
     offsetRef.current = { x: 0, y: 0 };
   }, []);
@@ -178,6 +180,7 @@ export function usePhotoGestures({
         return;
       }
 
+      setIsGestureActive(true);
       event.currentTarget.setPointerCapture?.(event.pointerId);
 
       const point: Point = { x: event.clientX, y: event.clientY };
@@ -270,6 +273,7 @@ export function usePhotoGestures({
         return;
       }
 
+      setIsGestureActive(false);
       const now = event.timeStamp || performance.now();
       const point: Point = { x: event.clientX, y: event.clientY };
       const rect = event.currentTarget.getBoundingClientRect();
@@ -342,6 +346,7 @@ export function usePhotoGestures({
 
   const onPointerCancel = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
+      setIsGestureActive(false);
       pointersRef.current.delete(event.pointerId);
       event.currentTarget.releasePointerCapture?.(event.pointerId);
 
@@ -394,10 +399,10 @@ export function usePhotoGestures({
       transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
       transformOrigin: "center center",
       touchAction: enabled ? "none" : "auto",
-      transition: "transform 160ms ease-out",
+      transition: enabled && isGestureActive ? "none" : "transform 160ms ease-out",
       willChange: enabled ? "transform" : undefined,
     };
-  }, [enabled, offset.x, offset.y, scale]);
+  }, [enabled, isGestureActive, offset.x, offset.y, scale]);
 
   return {
     scale,

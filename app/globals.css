@@ -52,7 +52,7 @@
   --tap-min: 44px;
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-brand) 28%, transparent);
   --layout-max-width: 960px;
-  --layout-padding-inline: 0.84rem;
+  --layout-padding-inline: 0.76rem;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-nav-height: 4.58rem;
   --bottom-nav-edge-offset: max(0.56rem, var(--safe-area-bottom));
@@ -64,8 +64,8 @@
   );
   --floating-guestbook-cta-bottom: calc(var(--bottom-occupied-nav) + var(--floating-guestbook-cta-gap));
   --page-bottom-occupied-height: var(--bottom-occupied-nav);
-  --page-bottom-buffer-nav-only: 1.02rem;
-  --page-bottom-buffer-nav-with-guestbook-cta: 1.08rem;
+  --page-bottom-buffer-nav-only: 0.62rem;
+  --page-bottom-buffer-nav-with-guestbook-cta: 0.74rem;
   --page-bottom-content-buffer: var(--page-bottom-buffer-nav-only);
   --page-bottom-content-padding: calc(var(--page-bottom-occupied-height) + var(--page-bottom-content-buffer));
   --z-bottom-cta: 35;
@@ -120,6 +120,10 @@
   font-weight: var(--weight-semibold);
   line-height: 1.16;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  writing-mode: horizontal-tb;
   text-decoration: none;
   transition:
     background-color 160ms ease,
@@ -152,6 +156,25 @@
   background: color-mix(in srgb, var(--color-brand) 64%, var(--color-brand-strong) 36%);
   transform: translateY(0.5px);
   box-shadow: 0 5px 12px rgb(116 102 229 / 20%);
+}
+
+.photo-viewer-control {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  writing-mode: horizontal-tb;
+}
+
+.photo-viewer-control-row {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.photo-viewer-control-row::-webkit-scrollbar {
+  display: none;
 }
 
 .ui-btn-secondary {

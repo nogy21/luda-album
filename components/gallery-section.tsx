@@ -106,6 +106,7 @@ export function GallerySection({
   );
   const [activeEventName, setActiveEventName] = useState("전체");
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
+  const [lightboxDirection, setLightboxDirection] = useState<-1 | 0 | 1>(0);
   const [commentsByPhotoId, setCommentsByPhotoId] = useState<Record<string, PhotoCommentRow[]>>(
     {},
   );
@@ -202,6 +203,7 @@ export function GallerySection({
 
   const closeLightbox = useCallback(() => {
     const restoreFocus = () => {
+      setLightboxDirection(0);
       setLightbox(null);
       window.requestAnimationFrame(() => {
         triggerRef.current?.focus();
@@ -212,6 +214,7 @@ export function GallerySection({
   }, [exitLightboxImmersive]);
 
   const moveLightbox = useCallback((step: number) => {
+    setLightboxDirection(step > 0 ? 1 : -1);
     setLightbox((current) => {
       if (!current) {
         return current;
@@ -493,8 +496,15 @@ export function GallerySection({
 
     const nextItem = lightbox.items[(lightbox.index + 1) % lightbox.items.length];
     const prevItem = lightbox.items[(lightbox.index - 1 + lightbox.items.length) % lightbox.items.length];
-    const preloadTargets = [nextItem?.src, prevItem?.src].filter(
-      (value): value is string => Boolean(value),
+    const preloadTargets = Array.from(
+      new Set(
+        [
+          nextItem?.thumbSrc ?? nextItem?.src,
+          nextItem?.src,
+          prevItem?.thumbSrc ?? prevItem?.src,
+          prevItem?.src,
+        ].filter((value): value is string => Boolean(value)),
+      ),
     );
 
     for (const target of preloadTargets) {
@@ -643,6 +653,7 @@ export function GallerySection({
     triggerElement: HTMLButtonElement,
   ) => {
     triggerRef.current = triggerElement;
+    setLightboxDirection(0);
     setLightbox({ items: targetItems, index });
   };
 
@@ -772,7 +783,7 @@ export function GallerySection({
                           alt={image.alt}
                           width={420}
                           height={560}
-                          quality={64}
+                          quality={60}
                           sizes="(max-width: 639px) 33vw, (max-width: 1023px) 25vw, 18vw"
                           className="motion-safe-scale aspect-square w-full object-cover"
                         />
@@ -916,21 +927,52 @@ export function GallerySection({
                         }
                       }}
                     >
-                      <Image
-                        src={selectedImage.src}
-                        alt={selectedImage.alt}
-                        width={1100}
-                        height={1300}
-                        sizes={isLightboxImmersive ? "100vw" : "(max-width: 768px) 92vw, 760px"}
-                        className={`select-none object-contain ${
-                          isLightboxImmersive ? "h-full w-full" : "max-h-[80vh] w-full"
-                        }`}
-                        quality={82}
-                        fetchPriority="high"
-                        style={isLightboxImmersive ? lightboxTransformStyle : undefined}
-                        draggable={false}
-                        priority
-                      />
+                      <AnimatePresence initial={false} mode="wait">
+                        <motion.div
+                          key={selectedImage.id}
+                          className="h-full w-full"
+                          initial={
+                            reduceMotion
+                              ? false
+                              : {
+                                  opacity: 0,
+                                  x: lightboxDirection === 0 ? 0 : lightboxDirection * 28,
+                                  scale: 0.996,
+                                }
+                          }
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={
+                            reduceMotion
+                              ? { opacity: 1 }
+                              : {
+                                  opacity: 0,
+                                  x: lightboxDirection === 0 ? 0 : lightboxDirection * -28,
+                                  scale: 0.996,
+                                }
+                          }
+                          transition={{
+                            duration: reduceMotion ? 0 : 0.22,
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                        >
+                          <Image
+                            src={selectedImage.src}
+                            alt={selectedImage.alt}
+                            width={1100}
+                            height={1300}
+                            sizes={isLightboxImmersive ? "100vw" : "(max-width: 768px) 92vw, 760px"}
+                            className={`select-none object-contain ${
+                              isLightboxImmersive ? "h-full w-full" : "max-h-[80vh] w-full"
+                            }`}
+                            quality={74}
+                            fetchPriority="high"
+                            style={isLightboxImmersive ? lightboxTransformStyle : undefined}
+                            decoding="async"
+                            draggable={false}
+                            priority
+                          />
+                        </motion.div>
+                      </AnimatePresence>
 
                       {isLightboxImmersive ? (
                         <div
@@ -938,30 +980,30 @@ export function GallerySection({
                             isOverlayVisible ? "opacity-100" : "pointer-events-none opacity-0"
                           }`}
                         >
-                          <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 px-3 py-[max(0.75rem,env(safe-area-inset-top))]">
+                          <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 px-2.5 py-[max(0.68rem,env(safe-area-inset-top))]">
                             <button
                               type="button"
                               onClick={() => void toggleLightboxFullscreen()}
-                              className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
+                              className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-black/56 px-2.5 text-[0.72rem] text-white hover:bg-black/68"
                             >
                               전체화면 종료
                             </button>
                             <button
                               type="button"
                               onClick={closeLightbox}
-                              className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
+                              className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-black/56 px-2.5 text-[0.72rem] text-white hover:bg-black/68"
                             >
                               닫기
                             </button>
                           </div>
-                          <div className="absolute inset-x-0 bottom-[max(0.7rem,env(safe-area-inset-bottom))] flex justify-center px-3">
-                            <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-white/18 bg-black/58 px-2 py-2 backdrop-blur-sm">
+                          <div className="absolute inset-x-0 bottom-[max(0.62rem,env(safe-area-inset-bottom))] flex justify-center px-2.5">
+                            <div className="photo-viewer-control-row flex max-w-full items-center gap-1.5 rounded-full border border-white/18 bg-black/58 px-2 py-1.5 backdrop-blur-sm">
                               {lightbox && lightbox.items.length > 1 ? (
                                 <>
                                   <button
                                     type="button"
                                     onClick={() => moveLightbox(-1)}
-                                    className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                                    className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
                                     aria-label="이전 사진"
                                   >
                                     이전
@@ -969,7 +1011,7 @@ export function GallerySection({
                                   <button
                                     type="button"
                                     onClick={() => moveLightbox(1)}
-                                    className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                                    className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
                                     aria-label="다음 사진"
                                   >
                                     다음
@@ -977,7 +1019,7 @@ export function GallerySection({
                                 </>
                               ) : null}
                               {isLightboxZoomed ? (
-                                <span className="shrink-0 whitespace-nowrap px-2 text-[0.7rem] font-semibold text-white/84">
+                                <span className="photo-viewer-control shrink-0 px-2 text-[0.68rem] font-semibold text-white/84">
                                   확대됨
                                 </span>
                               ) : null}
@@ -989,25 +1031,25 @@ export function GallerySection({
 
                     {!isLightboxImmersive ? (
                       <>
-                        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/90 px-2.5 py-2 text-white">
+                        <div className="flex items-center justify-between gap-1.5 border-t border-white/10 bg-black/90 px-2 py-1.5 text-white">
                           <div>
-                            <p className="line-clamp-1 text-[0.86rem] font-semibold text-white/95">
+                            <p className="line-clamp-1 text-[0.82rem] font-semibold text-white/95">
                               {selectedImage.caption}
                             </p>
-                            <p className="text-[0.72rem] text-white/70">
+                            <p className="text-[0.7rem] text-white/70">
                               {formatDateLabel(selectedImage.takenAt)}
                             </p>
-                            <p className="text-[0.68rem] text-white/60">
+                            <p className="text-[0.66rem] text-white/60">
                               {getPhotoTags(selectedImage).join(", ")}
                             </p>
                           </div>
-                          <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
+                          <div className="photo-viewer-control-row flex items-center gap-1.25 pb-0.5">
                             {lightbox && lightbox.items.length > 1 ? (
                               <>
                                 <button
                                   type="button"
                                   onClick={() => moveLightbox(-1)}
-                                  className="min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                                  className="photo-viewer-control min-h-10 min-w-10 shrink-0 rounded-full bg-white/15 px-2.5 text-base font-semibold text-white"
                                   aria-label="이전 사진"
                                 >
                                   ‹
@@ -1015,7 +1057,7 @@ export function GallerySection({
                                 <button
                                   type="button"
                                   onClick={() => moveLightbox(1)}
-                                  className="min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded-full bg-white/15 px-3 text-lg font-semibold text-white"
+                                  className="photo-viewer-control min-h-10 min-w-10 shrink-0 rounded-full bg-white/15 px-2.5 text-base font-semibold text-white"
                                   aria-label="다음 사진"
                                 >
                                   ›
@@ -1025,22 +1067,22 @@ export function GallerySection({
                             <button
                               type="button"
                               onClick={() => void toggleLightboxFullscreen()}
-                              className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-2.5 text-xs font-semibold text-white"
+                              className="photo-viewer-control min-h-10 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-2.5 text-[0.7rem] font-semibold text-white"
                             >
                               전체화면
                             </button>
                             <button
                               type="button"
                               onClick={closeLightbox}
-                              className="min-h-11 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-3 text-sm font-semibold text-white"
+                              className="photo-viewer-control min-h-10 shrink-0 whitespace-nowrap rounded-full bg-white/20 px-2.5 text-[0.78rem] font-semibold text-white"
                             >
                               닫기
                             </button>
                           </div>
                         </div>
-                        <div className="border-t border-white/10 bg-black/95 px-2.5 py-2.5 text-white">
+                        <div className="border-t border-white/10 bg-black/95 px-2 py-2 text-white">
                           <form
-                            className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2.5"
+                            className="rounded-[0.95rem] border border-white/14 bg-white/[0.04] p-2"
                             onSubmit={handleSubmitComment}
                           >
                             <label htmlFor="photo-comment-message" className="sr-only">
@@ -1056,10 +1098,10 @@ export function GallerySection({
                                 }
                               }}
                               placeholder="댓글을 남겨주세요"
-                              className="min-h-[3.4rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-3 py-2 text-[0.84rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                              className="min-h-[3rem] w-full resize-none rounded-[0.82rem] border border-white/14 bg-white/[0.08] px-2.5 py-1.5 text-[0.8rem] leading-[1.5] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                               maxLength={MAX_PHOTO_COMMENT_LENGTH}
                             />
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                               <label htmlFor="photo-comment-nickname" className="sr-only">
                                 닉네임
                               </label>
@@ -1069,21 +1111,21 @@ export function GallerySection({
                                 value={commentNickname}
                                 onChange={(event) => setCommentNickname(event.target.value)}
                                 placeholder="닉네임(선택)"
-                                className="min-h-10 w-[8.5rem] rounded-full border border-white/14 bg-white/[0.08] px-3 text-[0.76rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                                className="min-h-9 w-[7.8rem] rounded-full border border-white/14 bg-white/[0.08] px-2.5 text-[0.72rem] text-white placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                                 maxLength={24}
                               />
-                              <span className="text-[0.68rem] text-white/70">{remainingCommentChars}자 남음</span>
+                              <span className="text-[0.66rem] text-white/70">{remainingCommentChars}자 남음</span>
                               <button
                                 type="submit"
                                 disabled={commentStatus === "posting"}
-                                className="ml-auto min-h-10 rounded-full bg-white/18 px-3.5 text-[0.78rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
+                                className="photo-viewer-control ml-auto min-h-9 rounded-full bg-white/18 px-3 text-[0.74rem] font-semibold text-white transition-colors hover:bg-white/24 disabled:opacity-60"
                               >
                                 {commentStatus === "posting" ? "남기는 중…" : "남기기"}
                               </button>
                             </div>
                           </form>
 
-                          <div className="mt-2 flex items-center justify-between text-[0.68rem] text-white/70">
+                          <div className="mt-1.5 flex items-center justify-between text-[0.66rem] text-white/70">
                             <span>{selectedPhotoComments.length}개 댓글</span>
                             <span>최신순</span>
                           </div>

@@ -28,7 +28,7 @@ export function AppShell({ children }: AppShellProps) {
       </a>
       <main
         id="main-content"
-        className="layout-container pt-[max(0.4rem,env(safe-area-inset-top))] sm:pt-3"
+        className="layout-container pt-[max(0.22rem,env(safe-area-inset-top))] sm:pt-2"
       >
         {children}
       </main>

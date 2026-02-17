@@ -26,6 +26,7 @@ const formatDateLabel = (takenAt: string) => {
 
 export function LandingRecentSection({ items }: LandingRecentSectionProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightboxDirection, setLightboxDirection] = useState<-1 | 0 | 1>(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const lightboxImmersiveRef = useRef<HTMLDivElement | null>(null);
   const reduceMotion = useReducedMotion();
@@ -36,6 +37,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
   const moveLightbox = useCallback(
     (step: number) => {
+      setLightboxDirection(step > 0 ? 1 : -1);
       setLightboxIndex((current) => {
         if (current === null) {
           return current;
@@ -72,6 +74,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
   const closeLightbox = useCallback(() => {
     const restoreFocus = () => {
+      setLightboxDirection(0);
       setLightboxIndex(null);
       window.requestAnimationFrame(() => {
         triggerRef.current?.focus();
@@ -108,8 +111,15 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
 
     const nextItem = previewItems[(lightboxIndex + 1) % previewItemCount];
     const prevItem = previewItems[(lightboxIndex - 1 + previewItemCount) % previewItemCount];
-    const preloadTargets = [nextItem?.src, prevItem?.src].filter(
-      (value): value is string => Boolean(value),
+    const preloadTargets = Array.from(
+      new Set(
+        [
+          nextItem?.thumbSrc ?? nextItem?.src,
+          nextItem?.src,
+          prevItem?.thumbSrc ?? prevItem?.src,
+          prevItem?.src,
+        ].filter((value): value is string => Boolean(value)),
+      ),
     );
 
     for (const target of preloadTargets) {
@@ -184,6 +194,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
               type="button"
               onClick={(event) => {
                 triggerRef.current = event.currentTarget;
+                setLightboxDirection(0);
                 setLightboxIndex(index);
               }}
               className="group relative overflow-hidden rounded-[0.8rem] bg-[color:var(--color-surface)] text-left"
@@ -194,7 +205,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                 alt={item.alt}
                 width={280}
                 height={280}
-                quality={66}
+                quality={62}
                 sizes="(max-width: 640px) 24vw, 180px"
                 className="motion-safe-scale aspect-square w-full object-cover"
               />
@@ -273,21 +284,52 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                   }
                 }}
               >
-                <Image
-                  src={selectedImage.src}
-                  alt={selectedImage.alt}
-                  width={1200}
-                  height={1400}
-                  sizes={isLightboxImmersive ? "100vw" : "(max-width: 860px) 92vw, 760px"}
-                  className={`select-none object-contain ${
-                    isLightboxImmersive ? "h-full w-full" : "max-h-[78vh] w-full"
-                  }`}
-                  quality={82}
-                  fetchPriority="high"
-                  style={isLightboxImmersive ? lightboxTransformStyle : undefined}
-                  draggable={false}
-                  priority
-                />
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    key={selectedImage.id}
+                    className="h-full w-full"
+                    initial={
+                      reduceMotion
+                        ? false
+                        : {
+                            opacity: 0,
+                            x: lightboxDirection === 0 ? 0 : lightboxDirection * 28,
+                            scale: 0.996,
+                          }
+                    }
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={
+                      reduceMotion
+                        ? { opacity: 1 }
+                        : {
+                            opacity: 0,
+                            x: lightboxDirection === 0 ? 0 : lightboxDirection * -28,
+                            scale: 0.996,
+                          }
+                    }
+                    transition={{
+                      duration: reduceMotion ? 0 : 0.22,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  >
+                    <Image
+                      src={selectedImage.src}
+                      alt={selectedImage.alt}
+                      width={1200}
+                      height={1400}
+                      sizes={isLightboxImmersive ? "100vw" : "(max-width: 860px) 92vw, 760px"}
+                      className={`select-none object-contain ${
+                        isLightboxImmersive ? "h-full w-full" : "max-h-[78vh] w-full"
+                      }`}
+                      quality={74}
+                      fetchPriority="high"
+                      style={isLightboxImmersive ? lightboxTransformStyle : undefined}
+                      decoding="async"
+                      draggable={false}
+                      priority
+                    />
+                  </motion.div>
+                </AnimatePresence>
 
                 {isLightboxImmersive ? (
                   <div
@@ -295,29 +337,29 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                       isOverlayVisible ? "opacity-100" : "pointer-events-none opacity-0"
                     }`}
                   >
-                    <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 px-3 py-[max(0.75rem,env(safe-area-inset-top))]">
+                    <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 px-2.5 py-[max(0.68rem,env(safe-area-inset-top))]">
                       <button
                         type="button"
                         onClick={() => void toggleLightboxFullscreen()}
-                        className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
+                        className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-black/56 px-2.5 text-[0.72rem] text-white hover:bg-black/68"
                       >
                         전체화면 종료
                       </button>
                       <button
                         type="button"
                         onClick={closeLightbox}
-                        className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-black/56 px-3 text-[0.76rem] text-white hover:bg-black/68"
+                        className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-black/56 px-2.5 text-[0.72rem] text-white hover:bg-black/68"
                       >
                         닫기
                       </button>
                     </div>
                     {previewItemCount > 1 ? (
-                      <div className="absolute inset-x-0 bottom-[max(0.7rem,env(safe-area-inset-bottom))] flex justify-center px-3">
-                        <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-white/18 bg-black/58 px-2 py-2 backdrop-blur-sm">
+                      <div className="absolute inset-x-0 bottom-[max(0.62rem,env(safe-area-inset-bottom))] flex justify-center px-2.5">
+                        <div className="photo-viewer-control-row flex max-w-full items-center gap-1.5 rounded-full border border-white/18 bg-black/58 px-2 py-1.5 backdrop-blur-sm">
                           <button
                             type="button"
                             onClick={() => moveLightbox(-1)}
-                            className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                            className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
                             aria-label="이전 사진"
                           >
                             이전
@@ -325,13 +367,13 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                           <button
                             type="button"
                             onClick={() => moveLightbox(1)}
-                            className="ui-btn shrink-0 whitespace-nowrap border-white/24 bg-white/10 px-3 text-[0.76rem] text-white hover:bg-white/20"
+                            className="ui-btn photo-viewer-control shrink-0 border-white/24 bg-white/10 px-2.5 text-[0.72rem] text-white hover:bg-white/20"
                             aria-label="다음 사진"
                           >
                             다음
                           </button>
                           {isLightboxZoomed ? (
-                            <span className="shrink-0 whitespace-nowrap px-2 text-[0.7rem] font-semibold text-white/84">
+                            <span className="photo-viewer-control shrink-0 px-2 text-[0.68rem] font-semibold text-white/84">
                               확대됨
                             </span>
                           ) : null}
@@ -343,17 +385,17 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
               </div>
 
               {!isLightboxImmersive ? (
-                <div className="space-y-2 border-t border-white/10 bg-black/90 px-2.5 py-2.5">
+                <div className="space-y-1.5 border-t border-white/10 bg-black/90 px-2 py-2">
                   <div>
-                    <p className="line-clamp-1 text-[0.86rem] font-semibold text-white/96">
+                    <p className="line-clamp-1 text-[0.82rem] font-semibold text-white/96">
                       {selectedImage.caption}
                     </p>
-                    <p className="text-[0.73rem] text-white/74">{formatDateLabel(selectedImage.takenAt)}</p>
+                    <p className="text-[0.7rem] text-white/74">{formatDateLabel(selectedImage.takenAt)}</p>
                   </div>
-                  <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5">
+                  <div className="photo-viewer-control-row flex items-center gap-1.25 pb-0.5">
                     <Link
                       href={buildDayLink(selectedImage.takenAt)}
-                      className="ui-btn ui-btn-primary shrink-0 whitespace-nowrap px-3"
+                      className="ui-btn ui-btn-primary photo-viewer-control shrink-0 px-2.5"
                     >
                       이동하기
                     </Link>
@@ -362,7 +404,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                         <button
                           type="button"
                           onClick={() => moveLightbox(-1)}
-                          className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                          className="ui-btn photo-viewer-control shrink-0 border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
                           aria-label="이전 사진"
                         >
                           이전
@@ -370,7 +412,7 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                         <button
                           type="button"
                           onClick={() => moveLightbox(1)}
-                          className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                          className="ui-btn photo-viewer-control shrink-0 border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
                           aria-label="다음 사진"
                         >
                           다음
@@ -380,14 +422,14 @@ export function LandingRecentSection({ items }: LandingRecentSectionProps) {
                     <button
                       type="button"
                       onClick={() => void toggleLightboxFullscreen()}
-                      className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
+                      className="ui-btn photo-viewer-control shrink-0 border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
                     >
                       전체화면
                     </button>
                     <button
                       type="button"
                       onClick={closeLightbox}
-                      className="ui-btn shrink-0 whitespace-nowrap border-white/26 bg-white/10 px-3 text-white hover:bg-white/16"
+                      className="ui-btn photo-viewer-control shrink-0 border-white/26 bg-white/10 px-2.5 text-white hover:bg-white/16"
                     >
                       닫기
                     </button>
