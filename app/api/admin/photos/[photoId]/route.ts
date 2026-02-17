@@ -8,6 +8,7 @@ import {
   getGalleryPhotosTableName,
   updateGalleryPhotoMetadata,
 } from "@/lib/gallery/repository";
+import { revalidateGalleryPublicPaths } from "@/lib/cache/revalidate-gallery-paths";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type PatchBody = {
@@ -173,13 +174,14 @@ export async function PATCH(
       featuredRank: parsed.patch.featuredRank,
       eventNames: parsed.patch.eventNames,
     });
+    revalidateGalleryPublicPaths();
 
     return NextResponse.json({ item: updated });
   } catch (error) {
     return NextResponse.json(
       {
         error: {
-              message:
+          message:
             error instanceof Error
               ? error.message
               : "사진 정보를 저장하지 못했어요.",
@@ -262,6 +264,7 @@ export async function DELETE(
     }
 
     const deleted = await deleteGalleryPhotoRecord(supabase, { photoId }, tableName);
+    revalidateGalleryPublicPaths();
 
     return NextResponse.json({
       ok: true,

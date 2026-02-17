@@ -41,7 +41,19 @@ type GalleryPhotoSummaryRow = {
   created_at?: string | null;
 };
 
-type QueryError = { message: string } | null;
+type GalleryPhotoSummaryRpcRow = {
+  key: string;
+  year: number;
+  month: number;
+  count: number;
+  latest_taken_at: string;
+  latest_updated_at: string;
+};
+
+type QueryError = {
+  message: string;
+  code?: string | null;
+} | null;
 type QueryResponse<T> = {
   data: T | null;
   error: QueryError;
@@ -64,6 +76,10 @@ type QueryChain = {
 
 type RepositoryClient = {
   from: (table: string) => unknown;
+  rpc?: (
+    fn: string,
+    params?: Record<string, unknown>,
+  ) => PromiseLike<QueryResponse<unknown>>;
 };
 
 export type ListPhotosPageOptions = {
@@ -321,40 +337,48 @@ const mapRowsToPhotoItems = async (
   return rows.map((row) => mapRowToPhotoItem(row, eventNamesByPhotoId.get(row.id) ?? []));
 };
 
-const applyDateRangeFilter = (
-  query: QueryChain,
+const getDateRangeFilterBounds = (
   year?: number,
   month?: number,
   day?: number,
 ) => {
   if (!year) {
-    return query;
+    return { fromDate: undefined, toDate: undefined };
   }
 
   if (month && day && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
     const fromDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
     const toDate = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
 
-    return query
-      .gte("taken_at", fromDate.toISOString())
-      .lt("taken_at", toDate.toISOString());
+    return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
   }
 
   if (month && month >= 1 && month <= 12) {
     const fromDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
     const toDate = new Date(Date.UTC(year, month, 1, 0, 0, 0));
 
-    return query
-      .gte("taken_at", fromDate.toISOString())
-      .lt("taken_at", toDate.toISOString());
+    return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
   }
 
   const fromDate = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
   const toDate = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0));
 
-  return query
-    .gte("taken_at", fromDate.toISOString())
-    .lt("taken_at", toDate.toISOString());
+  return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
+};
+
+const applyDateRangeFilter = (
+  query: QueryChain,
+  year?: number,
+  month?: number,
+  day?: number,
+) => {
+  const { fromDate, toDate } = getDateRangeFilterBounds(year, month, day);
+
+  if (!fromDate || !toDate) {
+    return query;
+  }
+
+  return query.gte("taken_at", fromDate).lt("taken_at", toDate);
 };
 
 const getMonthDateRange = (year: number, month: number) => {
@@ -445,11 +469,102 @@ const buildYearMonthStats = (rows: GalleryPhotoSummaryRow[]): YearMonthStat[] =>
     }));
 };
 
+const mapSummaryRpcRowsToStats = (
+  rows: GalleryPhotoSummaryRpcRow[],
+): YearMonthStat[] => {
+  return [...rows]
+    .sort((left, right) => {
+      return +new Date(right.latest_taken_at) - +new Date(left.latest_taken_at);
+    })
+    .map((row) => ({
+      key: row.key,
+      year: row.year,
+      month: row.month,
+      count: row.count,
+      latestTakenAt: row.latest_taken_at,
+      latestUpdatedAt: row.latest_updated_at,
+      label: formatYearMonthLabel(row.year, row.month),
+      updatedLabel:
+        formatRelativeDaysFromNow(row.latest_updated_at) === "오늘"
+          ? "최근 업데이트 오늘"
+          : `최근 업데이트 ${formatRelativeDaysFromNow(row.latest_updated_at)}`,
+      metaLabel: formatMonthMetaLabel(
+        row.year,
+        row.month,
+        row.count,
+        row.latest_updated_at,
+      ),
+    }));
+};
+
+const isMissingPhotoSummaryRpcError = (error: QueryError) => {
+  if (!error) {
+    return false;
+  }
+
+  if (error.code === "42883") {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+
+  return (
+    message.includes("gallery_photo_summary_by_month") &&
+    (message.includes("does not exist") || message.includes("not found"))
+  );
+};
+
+const listPhotoSummaryFromRpc = async (
+  supabase: RepositoryClient,
+  options: ListPhotoSummaryOptions,
+) => {
+  if (typeof supabase.rpc !== "function") {
+    return null;
+  }
+
+  const { fromDate, toDate } = getDateRangeFilterBounds(
+    options.year,
+    options.month,
+    options.day,
+  );
+  const { data, error }: {
+    data: GalleryPhotoSummaryRpcRow[] | null;
+    error: QueryError;
+  } = await (supabase.rpc("gallery_photo_summary_by_month", {
+    p_visibility: getQueryVisibility(options.visibility),
+    p_from: fromDate ?? null,
+    p_to: toDate ?? null,
+  }) as QueryPromise<GalleryPhotoSummaryRpcRow[]>);
+
+  if (error) {
+    if (isMissingPhotoSummaryRpcError(error)) {
+      return null;
+    }
+
+    throw new Error(`Failed to load photo summary RPC: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+
+  return {
+    totalCount: rows.reduce((sum, row) => sum + row.count, 0),
+    months: mapSummaryRpcRowsToStats(rows),
+  };
+};
+
 export const listPhotoSummaryFromDatabase = async (
   supabase: RepositoryClient,
   options: ListPhotoSummaryOptions = {},
   tableName = getGalleryPhotosTableName(),
 ): Promise<PhotoSummaryResponse> => {
+  if (tableName === getGalleryPhotosTableName()) {
+    const rpcResult = await listPhotoSummaryFromRpc(supabase, options);
+
+    if (rpcResult) {
+      return rpcResult;
+    }
+  }
+
   const { year, month, day, visibility } = options;
   let query = supabase
     .from(tableName) as QueryChain;

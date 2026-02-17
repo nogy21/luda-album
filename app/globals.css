@@ -441,7 +441,7 @@ body {
 }
 
 .route-transition-layer {
-  will-change: opacity, transform;
+  contain: paint;
   transform-origin: center top;
 }
 

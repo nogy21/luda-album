@@ -1,6 +1,5 @@
 "use client";
 
-import gsap from "gsap";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
@@ -53,24 +52,34 @@ export function LandingHero({ items }: LandingHeroProps) {
       return;
     }
 
-    const context = gsap.context(() => {
-      gsap.fromTo(
-        targets,
-        { opacity: 0, y: 12 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.26,
-          ease: "power2.out",
-          stagger: 0.05,
-        },
-      );
-    }, root);
+    let isUnmounted = false;
+    let context: { revert: () => void } | null = null;
 
-    markHeroIntroSeen(window.sessionStorage, LANDING_INTRO_SESSION_KEY);
+    void import("gsap").then(({ default: gsap }) => {
+      if (isUnmounted) {
+        return;
+      }
+
+      context = gsap.context(() => {
+        gsap.fromTo(
+          targets,
+          { opacity: 0, y: 12 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.26,
+            ease: "power2.out",
+            stagger: 0.05,
+          },
+        );
+      }, root);
+
+      markHeroIntroSeen(window.sessionStorage, LANDING_INTRO_SESSION_KEY);
+    });
 
     return () => {
-      context.revert();
+      isUnmounted = true;
+      context?.revert();
     };
   }, []);
 

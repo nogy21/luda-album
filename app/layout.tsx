@@ -9,6 +9,7 @@ import "./globals.css";
 
 const paperlogy = localFont({
   variable: "--font-paperlogy",
+  preload: false,
   src: [
     {
       path: "../public/Paperlogy/Paperlogy-4Regular.ttf",

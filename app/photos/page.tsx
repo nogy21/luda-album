@@ -12,10 +12,10 @@ import type {
 } from "@/lib/gallery/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
-const INITIAL_MONTH_PAGE_LIMIT = 18;
-const INITIAL_PRELOAD_MONTHS = 2;
+const INITIAL_MONTH_PAGE_LIMIT = 12;
+const INITIAL_PRELOAD_MONTHS = 1;
 
 const sortByTakenAtDesc = (left: PhotoItem, right: PhotoItem) => {
   return +new Date(right.takenAt) - +new Date(left.takenAt);

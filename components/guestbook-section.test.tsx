@@ -5,6 +5,10 @@ import { GuestbookSection } from "./guestbook-section";
 
 const fetchMock = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 describe("GuestbookSection", () => {
   beforeEach(() => {
     fetchMock.mockReset();

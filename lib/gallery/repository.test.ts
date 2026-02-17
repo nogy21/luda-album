@@ -251,6 +251,87 @@ describe("gallery repository", () => {
     });
   });
 
+  test("listPhotoSummaryFromDatabase uses RPC summary when available", async () => {
+    const from = vi.fn();
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          key: "2026-02",
+          year: 2026,
+          month: 2,
+          count: 2,
+          latest_taken_at: "2026-02-12T10:00:00.000Z",
+          latest_updated_at: "2026-02-13T10:00:00.000Z",
+        },
+        {
+          key: "2026-01",
+          year: 2026,
+          month: 1,
+          count: 1,
+          latest_taken_at: "2026-01-12T10:00:00.000Z",
+          latest_updated_at: "2026-01-12T10:00:00.000Z",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await listPhotoSummaryFromDatabase(
+      { from, rpc },
+      { visibility: "family" },
+      "gallery_photos",
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      "gallery_photo_summary_by_month",
+      expect.objectContaining({
+        p_visibility: "family",
+      }),
+    );
+    expect(from).not.toHaveBeenCalled();
+    expect(result.totalCount).toBe(3);
+    expect(result.months.map((month) => month.key)).toEqual(["2026-02", "2026-01"]);
+  });
+
+  test("listPhotoSummaryFromDatabase falls back to row query when RPC is missing", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message: "function public.gallery_photo_summary_by_month does not exist",
+        code: "42883",
+      },
+    });
+    const summaryRows = [
+      {
+        id: "3",
+        taken_at: "2026-02-12T10:00:00.000Z",
+        updated_at: "2026-02-13T10:00:00.000Z",
+      },
+      {
+        id: "2",
+        taken_at: "2026-01-12T10:00:00.000Z",
+        updated_at: "2026-01-12T10:00:00.000Z",
+      },
+      {
+        id: "1",
+        taken_at: "2026-02-10T10:00:00.000Z",
+        updated_at: "2026-02-10T10:00:00.000Z",
+      },
+    ];
+    const summaryBuilder = createBuilder({ data: summaryRows, error: null });
+    const from = vi.fn(() => summaryBuilder);
+
+    const result = await listPhotoSummaryFromDatabase(
+      { from, rpc },
+      { visibility: "family" },
+      "gallery_photos",
+    );
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("gallery_photos");
+    expect(result.totalCount).toBe(3);
+    expect(result.months.map((month) => month.key)).toEqual(["2026-02", "2026-01"]);
+  });
+
   test("listPhotosMonthPageFromDatabase applies month range and cursor pagination", async () => {
     const rows = [
       {

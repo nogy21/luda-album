@@ -1,16 +1,14 @@
+import { Suspense } from "react";
+
 import { AppShell } from "@/components/app-shell";
 import { GuestbookSection } from "@/components/guestbook-section";
 
-type GuestbookPageSearchParams = {
-  prefill?: string;
-};
-
-export default async function GuestbookPage({ searchParams }: { searchParams?: Promise<GuestbookPageSearchParams> }) {
-  const resolvedSearchParams = (await searchParams) ?? {};
-
+export default function GuestbookPage() {
   return (
     <AppShell>
-      <GuestbookSection prefillMessage={resolvedSearchParams.prefill} />
+      <Suspense fallback={null}>
+        <GuestbookSection />
+      </Suspense>
     </AppShell>
   );
 }

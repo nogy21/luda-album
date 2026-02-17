@@ -6,6 +6,7 @@ import { parseEventNamesPayload } from "@/lib/gallery/event-names";
 import { createGalleryImageRecord } from "@/lib/gallery/repository";
 import { extractPhotoUploadMetadata } from "@/lib/gallery/upload-metadata";
 import type { PhotoVisibility } from "@/lib/gallery/types";
+import { revalidateGalleryPublicPaths } from "@/lib/cache/revalidate-gallery-paths";
 import { notifyUploadedFamilyPhotos } from "@/lib/notifications/web-push";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -268,6 +269,10 @@ export async function POST(request: Request) {
     } catch {
       // Keep upload success even if push broadcast fails.
     }
+  }
+
+  if (uploaded.length > 0) {
+    revalidateGalleryPublicPaths();
   }
 
   return NextResponse.json({

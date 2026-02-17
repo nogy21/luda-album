@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import type { GuestbookRow } from "@/lib/guestbook/types";
 import {
@@ -19,23 +20,34 @@ type ToastState = {
   message: string;
 };
 
-type GuestbookSectionProps = {
-  prefillMessage?: string;
-};
-
 const DEFAULT_ANNOUNCE_MESSAGE = "덕담을 남겨주세요.";
 
-export function GuestbookSection({ prefillMessage }: GuestbookSectionProps) {
+export function GuestbookSection() {
+  const searchParams = useSearchParams();
+  const hasAppliedPrefillRef = useRef(false);
   const [nickname, setNickname] = useState("");
-  const [message, setMessage] = useState(() =>
-    prefillMessage ? prefillMessage.slice(0, MAX_GUESTBOOK_MESSAGE_LENGTH) : "",
-  );
+  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<GuestbookRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [announceMessage, setAnnounceMessage] = useState(DEFAULT_ANNOUNCE_MESSAGE);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+
+  useEffect(() => {
+    if (hasAppliedPrefillRef.current) {
+      return;
+    }
+
+    const prefill = searchParams.get("prefill");
+
+    if (!prefill) {
+      return;
+    }
+
+    hasAppliedPrefillRef.current = true;
+    setMessage(prefill.slice(0, MAX_GUESTBOOK_MESSAGE_LENGTH));
+  }, [searchParams]);
 
   useEffect(() => {
     const run = async () => {
