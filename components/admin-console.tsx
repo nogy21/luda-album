@@ -5,17 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createUploadQueue,
-  getQueueSummary,
   markUploadError,
   markUploadSuccess,
   pickRetryTargets,
   setUploadProgress,
-  toDateTimeLocalInputValue,
   type UploadQueueItem,
 } from "@/lib/admin/upload-queue";
 import {
-  MAX_EVENT_NAME_COUNT,
-  MAX_EVENT_NAME_LENGTH,
   normalizeEventLabel,
   sanitizeEventNames,
 } from "@/lib/gallery/event-names";
@@ -58,14 +54,18 @@ type AdminPhotoItem = {
   featuredRank: number | null;
 };
 
+type AdminPostItem = {
+  id: string;
+  caption: string;
+  takenAt: string;
+  visibility: "family" | "admin";
+  eventNames: string[];
+  photos: AdminPhotoItem[];
+};
+
 type AdminPhotosApiResult = {
   items?: AdminPhotoItem[];
   nextCursor?: string | null;
-  error?: { message?: string };
-};
-
-type AdminEventsApiResult = {
-  items?: string[];
   error?: { message?: string };
 };
 
@@ -88,38 +88,7 @@ type AdminPwaBrandingApiResult = {
 const PAGE_LIMIT = 24;
 const MAX_CAPTION_LENGTH = 120;
 const MAX_PWA_LOGO_SIZE_BYTES = 10 * 1024 * 1024;
-const LARGE_QUEUE_COMPACT_THRESHOLD = 16;
-const QUEUE_RENDER_STEP = 24;
-
-type QueueFilter = "all" | UploadQueueItem["status"];
-
-const QUEUE_FILTERS: Array<{
-  key: QueueFilter;
-  label: string;
-}> = [
-  { key: "all", label: "전체" },
-  { key: "queued", label: "대기" },
-  { key: "uploading", label: "업로드 중" },
-  { key: "success", label: "성공" },
-  { key: "error", label: "실패" },
-];
-
-const QUEUE_STATUS_LABEL: Record<UploadQueueItem["status"], string> = {
-  queued: "대기",
-  uploading: "업로드 중",
-  success: "성공",
-  error: "실패",
-};
-
-const toDateTimeLocalValue = (iso: string) => {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const pad = (value: number) => `${value}`.padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
+const CAPTION_HASHTAG_REGEX = /#([\p{L}\p{N}_-]+)/gu;
 
 const revokeQueuePreviewUrls = (items: UploadQueueItem[]) => {
   for (const item of items) {
@@ -129,254 +98,72 @@ const revokeQueuePreviewUrls = (items: UploadQueueItem[]) => {
   }
 };
 
-type EventChipsInputProps = {
-  value: string[];
-  onChange: (eventNames: string[]) => void;
-  disabled?: boolean;
-  placeholder?: string;
+const toMinuteBucket = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso.slice(0, 16);
+  }
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    date.getUTCDate(),
+  ).padStart(2, "0")}T${String(date.getUTCHours()).padStart(2, "0")}:${String(
+    date.getUTCMinutes(),
+  ).padStart(2, "0")}`;
 };
 
-const EventChipsInput = ({
-  value,
-  onChange,
-  disabled = false,
-  placeholder = "이벤트 입력 후 Enter",
-}: EventChipsInputProps) => {
-  const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [isOpen, setIsOpen] = useState(false);
-  const requestIdRef = useRef(0);
+const toHashtagToken = (value: string) => {
+  return normalizeEventLabel(value)
+    .replace(/^#+/, "")
+    .replace(/\s+/g, "")
+    .replace(/[^\p{L}\p{N}_-]/gu, "")
+    .trim();
+};
 
-  const selectedEventNames = useMemo(() => {
-    return new Set(value.map((name) => normalizeEventLabel(name).toLowerCase()));
-  }, [value]);
+const extractEventNamesFromCaption = (caption: string) => {
+  const tokens = Array.from(caption.matchAll(CAPTION_HASHTAG_REGEX))
+    .map((match) => toHashtagToken(match[1] ?? ""))
+    .filter((value) => value.length > 0);
 
-  const addEventName = useCallback(
-    (raw: string) => {
-      const normalizedLabel = normalizeEventLabel(raw);
+  return sanitizeEventNames(tokens);
+};
 
-      if (
-        !normalizedLabel ||
-        normalizedLabel.length > MAX_EVENT_NAME_LENGTH ||
-        value.length >= MAX_EVENT_NAME_COUNT
-      ) {
-        return;
-      }
+const buildPostKey = (item: AdminPhotoItem) => {
+  const captionKey = item.caption.trim().toLowerCase();
+  const eventKey = sanitizeEventNames(item.eventNames)
+    .map((name) => normalizeEventLabel(name).toLowerCase())
+    .sort()
+    .join("|");
 
-      const merged = sanitizeEventNames([...value, normalizedLabel]);
-      if (merged.length === value.length) {
-        return;
-      }
+  return `${item.visibility}|${toMinuteBucket(item.takenAt)}|${captionKey}|${eventKey}`;
+};
 
-      onChange(merged);
-      setInputValue("");
-      setIsOpen(false);
-      setActiveIndex(-1);
-    },
-    [onChange, value],
-  );
+const groupPhotosToPosts = (items: AdminPhotoItem[]): AdminPostItem[] => {
+  const byKey = new Map<string, AdminPostItem>();
+  const ordered: string[] = [];
 
-  const removeEventName = useCallback(
-    (target: string) => {
-      const normalizedTarget = normalizeEventLabel(target).toLowerCase();
-      onChange(
-        value.filter(
-          (eventName) =>
-            normalizeEventLabel(eventName).toLowerCase() !== normalizedTarget,
-        ),
-      );
-    },
-    [onChange, value],
-  );
+  for (const item of items) {
+    const key = buildPostKey(item);
+    const existing = byKey.get(key);
 
-  useEffect(() => {
-    if (disabled) {
-      setSuggestions([]);
-      setIsOpen(false);
-      setActiveIndex(-1);
-      return;
+    if (existing) {
+      existing.photos.push(item);
+      continue;
     }
 
-    const query = normalizeEventLabel(inputValue);
-    if (!query) {
-      setSuggestions([]);
-      setIsOpen(false);
-      setActiveIndex(-1);
-      return;
-    }
+    ordered.push(key);
+    byKey.set(key, {
+      id: key,
+      caption: item.caption,
+      takenAt: item.takenAt,
+      visibility: item.visibility,
+      eventNames: item.eventNames,
+      photos: [item],
+    });
+  }
 
-    const nextRequestId = requestIdRef.current + 1;
-    requestIdRef.current = nextRequestId;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/admin/events?query=${encodeURIComponent(query)}&limit=8`,
-          {
-            method: "GET",
-            cache: "no-store",
-            signal: controller.signal,
-          },
-        );
-        const body = (await response.json()) as AdminEventsApiResult;
-
-        if (!response.ok) {
-          throw new Error(body.error?.message ?? "이벤트 자동완성 목록을 불러오지 못했어요.");
-        }
-
-        if (requestIdRef.current !== nextRequestId) {
-          return;
-        }
-
-        const sanitized = sanitizeEventNames(body.items ?? [])
-          .filter((item) => !selectedEventNames.has(normalizeEventLabel(item).toLowerCase()))
-          .slice(0, MAX_EVENT_NAME_COUNT);
-        setSuggestions(sanitized);
-        setIsOpen(sanitized.length > 0);
-        setActiveIndex(sanitized.length > 0 ? 0 : -1);
-      } catch {
-        if (requestIdRef.current !== nextRequestId) {
-          return;
-        }
-        setSuggestions([]);
-        setIsOpen(false);
-        setActiveIndex(-1);
-      }
-    }, 200);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [disabled, inputValue, selectedEventNames]);
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {value.map((eventName) => (
-          <span
-            key={eventName}
-            className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] text-[color:var(--color-ink)]"
-          >
-            {eventName}
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => removeEventName(eventName)}
-              className="text-[0.7rem] text-[color:var(--color-muted)] disabled:opacity-40"
-              aria-label={`${eventName} 삭제`}
-            >
-              x
-            </button>
-          </span>
-        ))}
-      </div>
-
-      <div className="relative">
-        <input
-          value={inputValue}
-          onChange={(event) => {
-            setInputValue(event.target.value);
-            if (!isOpen) {
-              setIsOpen(true);
-            }
-          }}
-          onBlur={() => {
-            window.setTimeout(() => setIsOpen(false), 120);
-          }}
-          onFocus={() => {
-            if (suggestions.length > 0) {
-              setIsOpen(true);
-            }
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-
-              if (isOpen && activeIndex >= 0 && suggestions[activeIndex]) {
-                addEventName(suggestions[activeIndex]);
-                return;
-              }
-
-              addEventName(inputValue);
-              return;
-            }
-
-            if (event.key === ",") {
-              event.preventDefault();
-              addEventName(inputValue);
-              return;
-            }
-
-            if (event.key === "Backspace" && !inputValue) {
-              const last = value[value.length - 1];
-              if (last) {
-                removeEventName(last);
-              }
-              return;
-            }
-
-            if (event.key === "ArrowDown") {
-              if (suggestions.length === 0) {
-                return;
-              }
-              event.preventDefault();
-              setIsOpen(true);
-              setActiveIndex((current) => (current + 1) % suggestions.length);
-              return;
-            }
-
-            if (event.key === "ArrowUp") {
-              if (suggestions.length === 0) {
-                return;
-              }
-              event.preventDefault();
-              setIsOpen(true);
-              setActiveIndex((current) =>
-                current <= 0 ? suggestions.length - 1 : current - 1,
-              );
-              return;
-            }
-
-            if (event.key === "Escape") {
-              setIsOpen(false);
-            }
-          }}
-          disabled={disabled || value.length >= MAX_EVENT_NAME_COUNT}
-          className="ui-input min-h-10 w-full px-3 text-[0.8rem] disabled:opacity-60"
-          placeholder={placeholder}
-        />
-
-        {isOpen && suggestions.length > 0 ? (
-          <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-[0.8rem] border border-[color:var(--color-line)] bg-white shadow-sm">
-            {suggestions.map((suggestion, index) => (
-              <li key={`${suggestion}-${index}`}>
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    addEventName(suggestion);
-                  }}
-                  className={`block min-h-10 w-full px-3 text-left text-[0.78rem] ${
-                    index === activeIndex
-                      ? "bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
-                      : "bg-white text-[color:var(--color-ink)] hover:bg-[color:var(--color-surface)]"
-                  }`}
-                >
-                  {suggestion}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-
-      <p className="text-[0.68rem] text-[color:var(--color-muted)]">
-        이벤트 {value.length}/{MAX_EVENT_NAME_COUNT} · 최대 {MAX_EVENT_NAME_LENGTH}자
-      </p>
-    </div>
-  );
+  return ordered
+    .map((key) => byKey.get(key))
+    .filter((item): item is AdminPostItem => item !== undefined);
 };
 
 const toPwaBrandingVersionLabel = (version: string) => {
@@ -391,6 +178,196 @@ const toPwaBrandingVersionLabel = (version: string) => {
   }
 
   return `최종 반영: ${parsed.toLocaleString("ko-KR")}`;
+};
+
+const HEIC_MIME_TYPES = new Set(["image/heic", "image/heif"]);
+const HEIC_EXTENSION_REGEX = /\.(heic|heif)$/i;
+
+let heic2anyPromise: Promise<typeof import("heic2any").default> | null = null;
+
+const isHeicLikeFile = (file: File) => {
+  const type = (file.type || "").toLowerCase();
+
+  if (HEIC_MIME_TYPES.has(type)) {
+    return true;
+  }
+
+  return HEIC_EXTENSION_REGEX.test(file.name);
+};
+
+const buildConvertedFileName = (name: string, extension: string) => {
+  const normalizedExt = extension.startsWith(".") ? extension : `.${extension}`;
+  const withoutExt = name.replace(/\.[^.]+$/, "");
+  const base = withoutExt || "upload";
+
+  return `${base}${normalizedExt}`;
+};
+
+const loadHeic2Any = async () => {
+  if (!heic2anyPromise) {
+    heic2anyPromise = import("heic2any").then((module) => module.default);
+  }
+
+  return heic2anyPromise;
+};
+
+const pickFirstBlob = (value: Blob | Blob[]) => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value;
+};
+
+const loadImageAsCanvasSource = async (file: File) => {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+
+      return {
+        width: bitmap.width,
+        height: bitmap.height,
+        draw: (ctx: CanvasRenderingContext2D) => {
+          ctx.drawImage(bitmap, 0, 0);
+        },
+        dispose: () => {
+          bitmap.close();
+        },
+      };
+    } catch {
+      // Fall back to HTMLImageElement decode path.
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new window.Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("이미지를 디코딩하지 못했어요."));
+      element.src = objectUrl;
+    });
+
+    return {
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      draw: (ctx: CanvasRenderingContext2D) => {
+        ctx.drawImage(image, 0, 0);
+      },
+      dispose: () => {
+        URL.revokeObjectURL(objectUrl);
+      },
+    };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+};
+
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+) => {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("변환 이미지 생성에 실패했어요."));
+          return;
+        }
+
+        resolve(blob);
+      },
+      type,
+      quality,
+    );
+  });
+};
+
+const convertImageToOptimizedFile = async (file: File) => {
+  const source = await loadImageAsCanvasSource(file);
+
+  try {
+    if (source.width <= 0 || source.height <= 0) {
+      throw new Error("이미지 크기를 읽지 못했어요.");
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = source.width;
+    canvas.height = source.height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("브라우저 캔버스를 사용할 수 없어요.");
+    }
+
+    source.draw(context);
+    const webpBlob = await canvasToBlob(canvas, "image/webp", 0.9);
+
+    if (webpBlob.type === "image/webp") {
+      return new File([webpBlob], buildConvertedFileName(file.name, ".webp"), {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    }
+
+    const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+
+    return new File([jpegBlob], buildConvertedFileName(file.name, ".jpg"), {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    source.dispose();
+  }
+};
+
+const convertHeicToOptimizedFile = async (file: File) => {
+  const heic2any = await loadHeic2Any();
+  const convertedBlobResult = await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.92,
+  });
+  const convertedBlob = pickFirstBlob(convertedBlobResult);
+
+  if (!convertedBlob) {
+    throw new Error("HEIC 변환 결과가 비어 있어요.");
+  }
+
+  const jpegBlob =
+    convertedBlob.type === "image/jpeg"
+      ? convertedBlob
+      : new Blob([convertedBlob], { type: "image/jpeg" });
+
+  const jpegFile = new File([jpegBlob], buildConvertedFileName(file.name, ".jpg"), {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+
+  try {
+    return await convertImageToOptimizedFile(jpegFile);
+  } catch {
+    return jpegFile;
+  }
+};
+
+const convertFileForPostUpload = async (file: File) => {
+  if (!isHeicLikeFile(file)) {
+    return file;
+  }
+
+  try {
+    return await convertHeicToOptimizedFile(file);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `HEIC 변환에 실패했어요: ${error.message}`
+        : "HEIC 변환에 실패했어요.",
+    );
+  }
 };
 
 const uploadSingleFile = (
@@ -460,26 +437,22 @@ export function AdminConsole() {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
-  const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
-  const [queueCompactMode, setQueueCompactMode] = useState(false);
-  const [expandedQueueItemIds, setExpandedQueueItemIds] = useState<string[]>([]);
-  const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_RENDER_STEP);
+  const [postCaption, setPostCaption] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [statusText, setStatusText] = useState("업로드할 사진을 선택해 주세요.");
   const [uploadVisibility, setUploadVisibility] = useState<"family" | "admin">("family");
-  const [bulkTakenAtInput, setBulkTakenAtInput] = useState("");
-  const [bulkEventNames, setBulkEventNames] = useState<string[]>([]);
-  const [togglingPhotoId, setTogglingPhotoId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<AdminPhotoItem[]>([]);
   const [nextPhotoCursor, setNextPhotoCursor] = useState<string | null>(null);
   const [isPhotosLoading, setIsPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
-  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [brokenPhotoPreviewIds, setBrokenPhotoPreviewIds] = useState<string[]>([]);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editingCaption, setEditingCaption] = useState("");
-  const [editingTakenAt, setEditingTakenAt] = useState("");
-  const [editingEventNames, setEditingEventNames] = useState<string[]>([]);
-  const [savingPhotoId, setSavingPhotoId] = useState<string | null>(null);
-  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [savingPostId, setSavingPostId] = useState<string | null>(null);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [uploadOverlayState, setUploadOverlayState] = useState<"idle" | "loading" | "success">("idle");
+  const [uploadOverlayProgress, setUploadOverlayProgress] = useState(0);
+  const [uploadSuccessAnimationSeed, setUploadSuccessAnimationSeed] = useState(0);
   const [pwaBranding, setPwaBranding] = useState<PwaBrandingState | null>(null);
   const [isPwaBrandingLoading, setIsPwaBrandingLoading] = useState(false);
   const [isPwaLogoUploading, setIsPwaLogoUploading] = useState(false);
@@ -488,6 +461,7 @@ export function AdminConsole() {
   const pwaLogoInputRef = useRef<HTMLInputElement | null>(null);
   const photosLoadingRef = useRef(false);
   const queueRef = useRef<UploadQueueItem[]>([]);
+  const uploadOverlayTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -525,26 +499,11 @@ export function AdminConsole() {
     };
   }, []);
 
-  const summary = useMemo(() => getQueueSummary(queue), [queue]);
-  const queueStatusCounts = useMemo(
-    () => ({
-      all: queue.length,
-      queued: queue.filter((item) => item.status === "queued").length,
-      uploading: queue.filter((item) => item.status === "uploading").length,
-      success: queue.filter((item) => item.status === "success").length,
-      error: queue.filter((item) => item.status === "error").length,
-    }),
-    [queue],
+  const extractedCaptionEventNames = useMemo(
+    () => extractEventNamesFromCaption(postCaption),
+    [postCaption],
   );
-  const filteredQueue = useMemo(
-    () => (queueFilter === "all" ? queue : queue.filter((item) => item.status === queueFilter)),
-    [queue, queueFilter],
-  );
-  const visibleQueue = useMemo(
-    () => filteredQueue.slice(0, visibleQueueCount),
-    [filteredQueue, visibleQueueCount],
-  );
-  const hiddenFilteredQueueCount = Math.max(0, filteredQueue.length - visibleQueue.length);
+  const groupedPosts = useMemo(() => groupPhotosToPosts(photos), [photos]);
   const queuedItems = useMemo(
     () => queue.filter((item) => item.status === "queued"),
     [queue],
@@ -566,41 +525,46 @@ export function AdminConsole() {
     queueRef.current = queue;
   }, [queue]);
 
-  useEffect(() => {
-    setExpandedQueueItemIds((current) =>
-      current.filter((itemId) => queue.some((item) => item.id === itemId)),
-    );
-
-    if (queue.length === 0) {
-      setQueueFilter("all");
-      setQueueCompactMode(false);
+  const clearUploadOverlayTimer = useCallback(() => {
+    if (uploadOverlayTimerRef.current === null) {
       return;
     }
 
-    if (queue.length >= LARGE_QUEUE_COMPACT_THRESHOLD && !queueCompactMode) {
-      setQueueCompactMode(true);
+    window.clearTimeout(uploadOverlayTimerRef.current);
+    uploadOverlayTimerRef.current = null;
+  }, []);
+
+  const clearSelectedUploadFiles = useCallback((statusMessage?: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
-  }, [queue, queueCompactMode]);
 
-  useEffect(() => {
-    setVisibleQueueCount(QUEUE_RENDER_STEP);
-  }, [queueFilter]);
+    revokeQueuePreviewUrls(queueRef.current);
+    setQueue([]);
 
-  useEffect(() => {
-    setVisibleQueueCount((current) => {
-      if (filteredQueue.length === 0) {
-        return QUEUE_RENDER_STEP;
-      }
+    if (statusMessage) {
+      setStatusText(statusMessage);
+    }
+  }, []);
 
-      return Math.min(Math.max(current, QUEUE_RENDER_STEP), filteredQueue.length);
-    });
-  }, [filteredQueue.length]);
+  const showUploadSuccessOverlay = useCallback(() => {
+    clearUploadOverlayTimer();
+    setUploadSuccessAnimationSeed((current) => current + 1);
+    setUploadOverlayProgress(100);
+    setUploadOverlayState("success");
+    uploadOverlayTimerRef.current = window.setTimeout(() => {
+      setUploadOverlayState("idle");
+      setUploadOverlayProgress(0);
+      uploadOverlayTimerRef.current = null;
+    }, 1300);
+  }, [clearUploadOverlayTimer]);
 
   useEffect(() => {
     return () => {
       revokeQueuePreviewUrls(queueRef.current);
+      clearUploadOverlayTimer();
     };
-  }, []);
+  }, [clearUploadOverlayTimer]);
 
   const loadPhotos = useCallback(
     async ({
@@ -670,6 +634,12 @@ export function AdminConsole() {
   );
 
   useEffect(() => {
+    setBrokenPhotoPreviewIds((current) =>
+      current.filter((photoId) => photos.some((photo) => photo.id === photoId)),
+    );
+  }, [photos]);
+
+  useEffect(() => {
     if (!authenticated || !ready) {
       return;
     }
@@ -716,231 +686,107 @@ export function AdminConsole() {
   }, [authenticated, loadPwaBranding, ready]);
 
   const hydrateQueuedItemMetadata = useCallback(async (items: UploadQueueItem[]) => {
-    for (const item of items) {
-      try {
-        const metadata = await extractPhotoUploadMetadata(item.file);
-        setQueue((current) =>
-          current.map((entry) => {
-            if (entry.id !== item.id) {
-              return entry;
-            }
+    const first = items[0];
 
-            return {
+    if (!first) {
+      return;
+    }
+
+    try {
+      const metadata = await extractPhotoUploadMetadata(first.file);
+      setPostCaption((current) => (current.trim().length > 0 ? current : metadata.caption));
+    } catch {
+      // Keep defaults when metadata extraction fails.
+    }
+
+    setQueue((current) =>
+      current.map((entry) =>
+        items.some((item) => item.id === entry.id)
+          ? {
               ...entry,
-              caption: entry.captionTouched ? entry.caption : metadata.caption,
-              takenAtInput: entry.takenAtTouched
-                ? entry.takenAtInput
-                : toDateTimeLocalInputValue(metadata.takenAt),
-              locationLabel: metadata.locationLabel ?? null,
               metadataLoading: false,
-            };
-          }),
-        );
-      } catch {
-        setQueue((current) =>
-          current.map((entry) =>
-            entry.id === item.id
-              ? {
-                  ...entry,
-                  metadataLoading: false,
-                }
-              : entry,
-          ),
-        );
-      }
-    }
+            }
+          : entry,
+      ),
+    );
   }, []);
-
-  const updateQueueCaption = (itemId: string, caption: string) => {
-    setQueue((current) =>
-      current.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              caption,
-              captionTouched: true,
-            }
-          : item,
-      ),
-    );
-  };
-
-  const updateQueueTakenAtInput = (itemId: string, takenAtInput: string) => {
-    setQueue((current) =>
-      current.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              takenAtInput,
-              takenAtTouched: true,
-            }
-          : item,
-      ),
-    );
-  };
-
-  const updateQueueEventNames = (itemId: string, eventNames: string[]) => {
-    setQueue((current) =>
-      current.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              eventNames: sanitizeEventNames(eventNames),
-            }
-          : item,
-      ),
-    );
-  };
-
-  const removeQueueItem = (itemId: string) => {
-    setQueue((current) => {
-      const target = current.find((item) => item.id === itemId);
-      if (target?.previewUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(target.previewUrl);
-      }
-      return current.filter((item) => item.id !== itemId);
-    });
-    setExpandedQueueItemIds((current) => current.filter((id) => id !== itemId));
-  };
-
-  const toggleQueueItemExpanded = (itemId: string) => {
-    setExpandedQueueItemIds((current) =>
-      current.includes(itemId)
-        ? current.filter((id) => id !== itemId)
-        : [...current, itemId],
-    );
-  };
-
-  const expandAllFilteredQueueItems = () => {
-    setExpandedQueueItemIds((current) => {
-      const merged = new Set(current);
-
-      for (const item of filteredQueue) {
-        merged.add(item.id);
-      }
-
-      return Array.from(merged);
-    });
-  };
-
-  const collapseAllFilteredQueueItems = () => {
-    const hiddenSet = new Set(filteredQueue.map((item) => item.id));
-
-    setExpandedQueueItemIds((current) => current.filter((id) => !hiddenSet.has(id)));
-  };
-
-  const applyBulkMetadataToQueue = () => {
-    const targetCount = queue.filter(
-      (item) => item.status === "queued" || item.status === "error",
-    ).length;
-
-    if (targetCount === 0) {
-      setStatusText("일괄 적용 대상(대기/실패)이 없어요.");
-      return;
-    }
-
-    if (!bulkTakenAtInput && bulkEventNames.length === 0) {
-      setStatusText("일괄 촬영일 또는 일괄 이벤트를 입력해 주세요.");
-      return;
-    }
-
-    if (bulkTakenAtInput) {
-      const date = new Date(bulkTakenAtInput);
-      if (Number.isNaN(date.getTime())) {
-        setStatusText("일괄 촬영일 형식이 올바르지 않아요.");
-        return;
-      }
-    }
-
-    setQueue((current) =>
-      current.map((item) => {
-        if (item.status !== "queued" && item.status !== "error") {
-          return item;
-        }
-
-        return {
-          ...item,
-          takenAtInput: bulkTakenAtInput || item.takenAtInput,
-          takenAtTouched: bulkTakenAtInput ? true : item.takenAtTouched,
-          eventNames: bulkEventNames.length > 0 ? bulkEventNames : item.eventNames,
-        };
-      }),
-    );
-    setStatusText(`일괄 메타데이터를 ${targetCount}개 항목에 적용했어요.`);
-  };
 
   const runUpload = async (targets: UploadQueueItem[]) => {
     if (targets.length === 0 || isUploading) {
       return;
     }
 
+    const caption = postCaption.trim();
+    if (!caption) {
+      setStatusText("캡션을 입력해 주세요.");
+      return;
+    }
+
+    if (caption.length > MAX_CAPTION_LENGTH) {
+      setStatusText(`캡션은 ${MAX_CAPTION_LENGTH}자 이하여야 해요.`);
+      return;
+    }
+
+    const eventNames = extractedCaptionEventNames;
+    const takenAtIso = new Date().toISOString();
+
+    clearUploadOverlayTimer();
+    setUploadOverlayProgress(0);
+    setUploadOverlayState("loading");
     setIsUploading(true);
     setStatusText(`${targets.length}개 파일 업로드를 시작합니다.`);
 
     let successCount = 0;
     let failureCount = 0;
+    let completedCount = 0;
+    let activeProgress = 0;
+
+    const updateCountProgress = () => {
+      const percent =
+        targets.length > 0
+          ? Math.min(100, ((completedCount + activeProgress) / targets.length) * 100)
+          : 0;
+      setUploadOverlayProgress(percent);
+    };
 
     for (const item of targets) {
       const itemVisibility = item.visibility ?? uploadVisibility;
-      const caption = item.caption.trim();
-      const takenAtDate = new Date(item.takenAtInput);
-      const hasInvalidEventName = item.eventNames.some((eventName) => {
-        const normalized = normalizeEventLabel(eventName);
-        return !normalized || normalized.length > MAX_EVENT_NAME_LENGTH;
-      });
-      const eventNames = sanitizeEventNames(item.eventNames);
+      let uploadFile: File;
 
-      if (!caption) {
+      try {
+        uploadFile = await convertFileForPostUpload(item.file);
+      } catch (conversionError) {
         failureCount += 1;
-        setQueue((current) =>
-          markUploadError(current, item.id, "캡션을 입력해 주세요."),
-        );
-        continue;
-      }
-
-      if (caption.length > MAX_CAPTION_LENGTH) {
-        failureCount += 1;
+        completedCount += 1;
+        activeProgress = 0;
+        updateCountProgress();
         setQueue((current) =>
           markUploadError(
             current,
             item.id,
-            `캡션은 ${MAX_CAPTION_LENGTH}자 이하여야 해요.`,
-          ),
-        );
-        continue;
-      }
-
-      if (Number.isNaN(takenAtDate.getTime())) {
-        failureCount += 1;
-        setQueue((current) =>
-          markUploadError(current, item.id, "촬영일 형식이 올바르지 않아요."),
-        );
-        continue;
-      }
-
-      if (item.eventNames.length > MAX_EVENT_NAME_COUNT || hasInvalidEventName) {
-        failureCount += 1;
-        setQueue((current) =>
-          markUploadError(
-            current,
-            item.id,
-            `이벤트는 최대 ${MAX_EVENT_NAME_COUNT}개, 각 ${MAX_EVENT_NAME_LENGTH}자까지 입력할 수 있어요.`,
+            conversionError instanceof Error
+              ? conversionError.message
+              : "업로드용 이미지 변환에 실패했어요.",
           ),
         );
         continue;
       }
 
       setQueue((current) => setUploadProgress(current, item.id, 0, "uploading"));
+      activeProgress = 0;
+      updateCountProgress();
 
       const result = await uploadSingleFile(
-        item.file,
+        uploadFile,
         itemVisibility,
         {
           caption,
-          takenAt: takenAtDate.toISOString(),
+          takenAt: takenAtIso,
           eventNames,
         },
         (progress) => {
+          activeProgress = Math.max(0, Math.min(progress, 1));
+          updateCountProgress();
           setQueue((current) =>
             setUploadProgress(current, item.id, progress, "uploading"),
           );
@@ -951,6 +797,9 @@ export function AdminConsole() {
         const uploadedPath = result.uploadedPath;
 
         successCount += 1;
+        completedCount += 1;
+        activeProgress = 0;
+        updateCountProgress();
         setQueue((current) =>
           markUploadSuccess(current, item.id, uploadedPath, {
             uploadedPhotoId: result.uploadedPhotoId,
@@ -961,6 +810,9 @@ export function AdminConsole() {
       }
 
       failureCount += 1;
+      completedCount += 1;
+      activeProgress = 0;
+      updateCountProgress();
       setQueue((current) =>
         markUploadError(
           current,
@@ -975,8 +827,22 @@ export function AdminConsole() {
       `업로드 완료: 성공 ${successCount}개 · 실패 ${failureCount}개`,
     );
 
+    clearSelectedUploadFiles();
+
+    if (successCount > 0 && failureCount === 0) {
+      showUploadSuccessOverlay();
+    } else {
+      clearUploadOverlayTimer();
+      setUploadOverlayState("idle");
+      setUploadOverlayProgress(0);
+    }
+
     if (successCount > 0) {
       void loadPhotos({ append: false });
+    }
+
+    if (failureCount === 0) {
+      setPostCaption("");
     }
   };
 
@@ -985,11 +851,18 @@ export function AdminConsole() {
       return;
     }
 
+    const shouldApplyDefaults = queue.length === 0;
     const items = createUploadQueue(Array.from(files), uploadVisibility).map((item) => ({
       ...item,
       previewUrl: URL.createObjectURL(item.file),
     }));
     setQueue((current) => [...current, ...items]);
+    if (shouldApplyDefaults) {
+      const first = items[0];
+      if (first) {
+        setPostCaption(first.caption);
+      }
+    }
     setStatusText(`${items.length}개 파일을 대기열에 추가했고 메타데이터를 읽는 중이에요.`);
     void hydrateQueuedItemMetadata(items);
   };
@@ -1098,105 +971,24 @@ export function AdminConsole() {
     }
   };
 
-  const handleToggleFeatured = async (item: UploadQueueItem) => {
-    if (!item.uploadedPhotoId || togglingPhotoId || isUploading) {
+  const handleStartEditPost = (post: AdminPostItem) => {
+    setEditingPostId(post.id);
+    setEditingCaption(post.caption);
+  };
+
+  const handleCancelEditPost = () => {
+    setEditingPostId(null);
+    setEditingCaption("");
+  };
+
+  const handleSavePostEdit = async (postId: string) => {
+    if (savingPostId || deletingPostId) {
       return;
     }
 
-    const previous = Boolean(item.isFeatured);
-    const next = !previous;
-
-    setTogglingPhotoId(item.uploadedPhotoId);
-    setQueue((current) =>
-      current.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              isFeatured: next,
-            }
-          : entry,
-      ),
-    );
-
-    try {
-      const response = await fetch(`/api/admin/photos/${item.uploadedPhotoId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          isFeatured: next,
-          featuredRank: next ? 1 : null,
-        }),
-      });
-      const data = (await response.json()) as {
-        item?: { isFeatured?: boolean };
-        error?: { message?: string };
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || "대표컷 저장에 실패했어요.");
-      }
-
-      setQueue((current) =>
-        current.map((entry) =>
-          entry.id === item.id
-            ? {
-                ...entry,
-                isFeatured: Boolean(data.item?.isFeatured),
-              }
-            : entry,
-        ),
-      );
-      setPhotos((current) =>
-        current.map((entry) =>
-          entry.id === item.uploadedPhotoId
-            ? {
-                ...entry,
-                isFeatured: Boolean(data.item?.isFeatured),
-              }
-            : entry,
-        ),
-      );
-
-      setStatusText(next ? "대표컷으로 지정했어요." : "대표컷 지정을 해제했어요.");
-    } catch (error) {
-      setQueue((current) =>
-        current.map((entry) =>
-          entry.id === item.id
-            ? {
-                ...entry,
-                isFeatured: previous,
-              }
-            : entry,
-        ),
-      );
-      setStatusText(
-        error instanceof Error
-          ? error.message
-          : "대표컷 설정 중 오류가 발생했어요.",
-      );
-    } finally {
-      setTogglingPhotoId(null);
-    }
-  };
-
-  const handleStartEditPhoto = (item: AdminPhotoItem) => {
-    setEditingPhotoId(item.id);
-    setEditingCaption(item.caption);
-    setEditingTakenAt(toDateTimeLocalValue(item.takenAt));
-    setEditingEventNames(item.eventNames ?? []);
-  };
-
-  const handleCancelEditPhoto = () => {
-    setEditingPhotoId(null);
-    setEditingCaption("");
-    setEditingTakenAt("");
-    setEditingEventNames([]);
-  };
-
-  const handleSavePhotoEdit = async (photoId: string) => {
-    if (savingPhotoId || deletingPhotoId) {
+    const targetPost = groupedPosts.find((post) => post.id === postId);
+    if (!targetPost) {
+      setStatusText("수정할 게시글을 찾지 못했어요.");
       return;
     }
 
@@ -1206,116 +998,113 @@ export function AdminConsole() {
       return;
     }
 
-    if (!editingTakenAt) {
-      setStatusText("촬영일을 입력해 주세요.");
-      return;
-    }
+    const eventNames = extractEventNamesFromCaption(trimmedCaption);
 
-    const takenAt = new Date(editingTakenAt);
-    if (Number.isNaN(takenAt.getTime())) {
-      setStatusText("촬영일 형식이 올바르지 않아요.");
-      return;
-    }
-
-    const invalidEventName = editingEventNames.some((eventName) => {
-      const normalized = normalizeEventLabel(eventName);
-      return !normalized || normalized.length > MAX_EVENT_NAME_LENGTH;
-    });
-
-    if (editingEventNames.length > MAX_EVENT_NAME_COUNT || invalidEventName) {
-      setStatusText(
-        `이벤트는 최대 ${MAX_EVENT_NAME_COUNT}개, 각 ${MAX_EVENT_NAME_LENGTH}자까지 입력할 수 있어요.`,
-      );
-      return;
-    }
-
-    const sanitizedEditingEventNames = sanitizeEventNames(editingEventNames);
-
-    setSavingPhotoId(photoId);
+    setSavingPostId(postId);
 
     try {
-      const response = await fetch(`/api/admin/photos/${photoId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          caption: trimmedCaption,
-          takenAt: takenAt.toISOString(),
-          eventNames: sanitizedEditingEventNames,
-        }),
-      });
-      const body = (await response.json()) as {
-        item?: AdminPhotoItem;
-        error?: { message?: string };
-      };
+      const updatedById = new Map<string, AdminPhotoItem>();
 
-      if (!response.ok || !body.item) {
-        throw new Error(body.error?.message || "사진 정보를 저장하지 못했어요.");
+      for (const photo of targetPost.photos) {
+        const response = await fetch(`/api/admin/photos/${photo.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            caption: trimmedCaption,
+            eventNames,
+          }),
+        });
+        const body = (await response.json()) as {
+          item?: AdminPhotoItem;
+          error?: { message?: string };
+        };
+
+        if (!response.ok || !body.item) {
+          throw new Error(body.error?.message || "게시글 정보를 저장하지 못했어요.");
+        }
+
+        updatedById.set(photo.id, {
+          ...body.item,
+          eventNames: Array.isArray(body.item.eventNames) ? body.item.eventNames : [],
+        });
       }
 
-      const savedItem: AdminPhotoItem = {
-        ...body.item,
-        eventNames: Array.isArray(body.item.eventNames) ? body.item.eventNames : [],
-      };
-
       setPhotos((current) =>
-        current.map((item) => (item.id === photoId ? savedItem : item)),
+        current.map((item) => updatedById.get(item.id) ?? item),
       );
-      handleCancelEditPhoto();
-      setStatusText("사진 정보를 저장했어요.");
+      handleCancelEditPost();
+      setStatusText(`게시글 사진 ${targetPost.photos.length}장을 저장했어요.`);
     } catch (error) {
       setStatusText(
         error instanceof Error
           ? error.message
-          : "사진 정보를 저장하지 못했어요.",
+          : "게시글 정보를 저장하지 못했어요.",
       );
     } finally {
-      setSavingPhotoId(null);
+      setSavingPostId(null);
     }
   };
 
-  const handleDeletePhoto = async (item: AdminPhotoItem) => {
-    if (savingPhotoId || deletingPhotoId) {
+  const handleDeletePost = async (post: AdminPostItem) => {
+    if (savingPostId || deletingPostId) {
       return;
     }
 
-    if (!window.confirm(`"${item.caption}" 사진을 삭제할까요? 이 작업은 되돌릴 수 없어요.`)) {
+    if (
+      !window.confirm(
+        `"${post.caption}" 게시글(${post.photos.length}장)을 삭제할까요? 이 작업은 되돌릴 수 없어요.`,
+      )
+    ) {
       return;
     }
 
-    setDeletingPhotoId(item.id);
+    setDeletingPostId(post.id);
 
     try {
-      const response = await fetch(`/api/admin/photos/${item.id}`, {
-        method: "DELETE",
-      });
-      const body = (await response.json()) as {
-        ok?: boolean;
-        deletedPhotoId?: string;
-        warning?: string;
-        error?: { message?: string };
-      };
+      const deletedIds = new Set<string>();
 
-      if (!response.ok || !body.ok || !body.deletedPhotoId) {
-        throw new Error(body.error?.message || "사진 삭제에 실패했어요.");
+      for (const photo of post.photos) {
+        const response = await fetch(`/api/admin/photos/${photo.id}`, {
+          method: "DELETE",
+        });
+        const body = (await response.json()) as {
+          ok?: boolean;
+          deletedPhotoId?: string;
+          warning?: string;
+          error?: { message?: string };
+        };
+
+        if (!response.ok || !body.ok || !body.deletedPhotoId) {
+          throw new Error(body.error?.message || "게시글 삭제에 실패했어요.");
+        }
+
+        deletedIds.add(body.deletedPhotoId);
       }
 
-      setPhotos((current) => current.filter((entry) => entry.id !== body.deletedPhotoId));
+      setPhotos((current) => current.filter((entry) => !deletedIds.has(entry.id)));
       setQueue((current) => {
-        const removed = current.filter((entry) => entry.uploadedPhotoId === body.deletedPhotoId);
+        const removed = current.filter(
+          (entry) => entry.uploadedPhotoId && deletedIds.has(entry.uploadedPhotoId),
+        );
         revokeQueuePreviewUrls(removed);
-        return current.filter((entry) => entry.uploadedPhotoId !== body.deletedPhotoId);
+        return current.filter(
+          (entry) => !(entry.uploadedPhotoId && deletedIds.has(entry.uploadedPhotoId)),
+        );
       });
-      setStatusText(body.warning ?? "사진을 삭제했어요.");
+      if (editingPostId === post.id) {
+        handleCancelEditPost();
+      }
+      setStatusText(`게시글 사진 ${deletedIds.size}장을 삭제했어요.`);
     } catch (error) {
       setStatusText(
         error instanceof Error
           ? error.message
-          : "사진 삭제 중 오류가 발생했어요.",
+          : "게시글 삭제 중 오류가 발생했어요.",
       );
     } finally {
-      setDeletingPhotoId(null);
+      setDeletingPostId(null);
     }
   };
 
@@ -1409,7 +1198,7 @@ export function AdminConsole() {
             관리자 업로드
           </h1>
           <p className="mt-1 text-[0.9rem] leading-[1.56] text-[color:var(--color-muted)]">
-            파일별 진행률과 부분 실패를 확인하고 재시도할 수 있어요.
+            게시글 단위(여러 장 + 캡션 + 해시태그)로 업로드하고 재시도할 수 있어요.
           </p>
         </div>
         <button
@@ -1417,16 +1206,15 @@ export function AdminConsole() {
           onClick={async () => {
             await fetch("/api/admin/logout", { method: "POST" });
             setAuthenticated(false);
-            revokeQueuePreviewUrls(queueRef.current);
-            setQueue([]);
+            clearSelectedUploadFiles();
+            clearUploadOverlayTimer();
+            setUploadOverlayState("idle");
+            setUploadOverlayProgress(0);
             setPhotos([]);
             setNextPhotoCursor(null);
-            setEditingPhotoId(null);
+            setPostCaption("");
+            setEditingPostId(null);
             setEditingCaption("");
-            setEditingTakenAt("");
-            setEditingEventNames([]);
-            setBulkTakenAtInput("");
-            setBulkEventNames([]);
             setPwaBranding(null);
             setIsPwaBrandingLoading(false);
             setIsPwaLogoUploading(false);
@@ -1443,7 +1231,7 @@ export function AdminConsole() {
         {statusText}
       </output>
 
-      <section className="ui-subtle-surface space-y-4 rounded-[var(--radius-md)] p-4">
+      <section className="ui-subtle-surface relative space-y-4 overflow-hidden rounded-[var(--radius-md)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[0.88rem] font-semibold text-[color:var(--color-ink)]">업로드 범위</p>
           <div className="flex items-center gap-2">
@@ -1494,75 +1282,32 @@ export function AdminConsole() {
           />
           <button
             type="button"
-            onClick={() => {
-              if (fileInputRef.current) {
-                fileInputRef.current.value = "";
-              }
-              revokeQueuePreviewUrls(queueRef.current);
-              setQueue([]);
-              setStatusText("업로드 대기열을 비웠어요.");
-            }}
+            onClick={() => clearSelectedUploadFiles("업로드 대기열을 비웠어요.")}
             className="ui-btn ui-btn-secondary px-3.5"
           >
             초기화
           </button>
         </div>
 
-        <div className="space-y-2 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-3">
-          <p className="text-[0.8rem] font-semibold text-[color:var(--color-ink)]">
-            대기/실패 항목 일괄 적용
+        <label className="space-y-1">
+          <span className="text-[0.78rem] font-semibold text-[color:var(--color-muted)]">
+            캡션(해시태그 포함)
+          </span>
+          <textarea
+            value={postCaption}
+            onChange={(event) => setPostCaption(event.target.value)}
+            maxLength={MAX_CAPTION_LENGTH}
+            disabled={isUploading}
+            className="ui-input min-h-[6.2rem] w-full resize-y px-3 py-2 text-[0.85rem] leading-[1.45] disabled:opacity-60"
+            placeholder='예: 루다 자는 모습 #꿈나라'
+          />
+          <p className="text-[0.7rem] text-[color:var(--color-muted)]">
+            {postCaption.length}/{MAX_CAPTION_LENGTH}
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
-                일괄 촬영일
-              </span>
-              <input
-                type="datetime-local"
-                value={bulkTakenAtInput}
-                onChange={(event) => setBulkTakenAtInput(event.target.value)}
-                disabled={isUploading}
-                className="ui-input min-h-10 w-full px-3 text-[0.78rem] disabled:opacity-60"
-              />
-            </label>
-            <div className="space-y-1">
-              <span className="text-[0.72rem] font-semibold text-[color:var(--color-muted)]">
-                일괄 이벤트
-              </span>
-              <EventChipsInput
-                value={bulkEventNames}
-                onChange={setBulkEventNames}
-                disabled={isUploading}
-                placeholder="일괄 이벤트 추가"
-              />
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={applyBulkMetadataToQueue}
-            disabled={isUploading || queue.length === 0}
-            className="ui-btn ui-btn-secondary px-3.5 text-[0.76rem] disabled:opacity-60"
-          >
-            일괄 적용
-          </button>
-        </div>
-
-        <div className="space-y-2 rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[0.8rem] font-semibold text-[color:var(--color-muted)]">
-            <span>전체 진행률</span>
-            <span>{Math.round(summary.totalProgress * 100)}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[color:var(--color-brand-soft)]">
-            <div
-              className="h-full rounded-full bg-[color:var(--color-brand)] transition-all"
-              style={{ width: `${Math.round(summary.totalProgress * 100)}%` }}
-            />
-          </div>
-          <p className="text-[0.76rem] leading-[1.45] text-[color:var(--color-muted)]">
-            성공 {summary.successCount}개 · 실패 {summary.failureCount}개 · 업로드 중{" "}
-            {summary.uploadingCount}개
+          <p className="text-[0.72rem] text-[color:var(--color-muted)]">
+            캡션에 입력한 #해시태그가 이벤트로 자동 저장됩니다.
           </p>
-        </div>
+        </label>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -1571,7 +1316,7 @@ export function AdminConsole() {
             disabled={isUploading || queuedItems.length === 0}
             className="ui-btn ui-btn-primary px-4 disabled:opacity-60"
           >
-            {isUploading ? "업로드 중…" : `대기 파일 업로드 (${queuedItems.length})`}
+            {isUploading ? "업로드 중…" : `게시글 업로드 (${queuedItems.length}장)`}
           </button>
           <button
             type="button"
@@ -1582,6 +1327,51 @@ export function AdminConsole() {
             실패 항목 재시도 ({failedItems.length})
           </button>
         </div>
+
+        {uploadOverlayState !== "idle" ? (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[var(--radius-md)] bg-black/10">
+            {uploadOverlayState === "loading" ? (
+              <div className="w-[100px]">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--color-brand-soft)]">
+                  <div
+                    className="h-full bg-[color:var(--color-brand)] transition-[width] duration-150 ease-linear"
+                    style={{ width: `${uploadOverlayProgress}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-center text-[0.95rem] font-bold text-[color:var(--color-brand-strong)]">
+                  {`${Math.max(0, Math.min(uploadOverlayProgress, 100)).toFixed(1)}%`}
+                </p>
+              </div>
+            ) : (
+              <div key={uploadSuccessAnimationSeed} className="flex h-[100px] w-[100px] items-center justify-center">
+                <svg
+                  viewBox="0 0 120 100"
+                  className="h-full w-full"
+                  fill="none"
+                  aria-label="업로드 완료"
+                >
+                  <path
+                    d="M8 53 L37 84 L112 12"
+                    pathLength={1}
+                    stroke="#22c55e"
+                    strokeWidth={12}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ strokeDasharray: 1, strokeDashoffset: 1 }}
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      from="1"
+                      to="0"
+                      dur="0.62s"
+                      fill="freeze"
+                    />
+                  </path>
+                </svg>
+              </div>
+            )}
+          </div>
+        ) : null}
       </section>
 
       <output className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[0.84rem] text-[color:var(--color-muted)]">
@@ -1661,228 +1451,10 @@ export function AdminConsole() {
         </div>
       </section>
 
-      {queue.length > 0 ? (
-        <section className="space-y-2.5">
-          <div className="rounded-[0.95rem] border border-[color:var(--color-line)] bg-white p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {QUEUE_FILTERS.map((filter) => {
-                  const active = queueFilter === filter.key;
-                  const count = queueStatusCounts[filter.key];
-
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      onClick={() => setQueueFilter(filter.key)}
-                      className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold ${
-                        active
-                          ? "border-[color:var(--color-brand)] bg-[color:var(--color-brand-soft)] text-[color:var(--color-brand-strong)]"
-                          : "border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-muted)]"
-                      }`}
-                    >
-                      {filter.label} {count}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setQueueCompactMode((current) => !current)}
-                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
-                >
-                  {queueCompactMode ? "컴팩트 해제" : "컴팩트"}
-                </button>
-                <button
-                  type="button"
-                  onClick={expandAllFilteredQueueItems}
-                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
-                >
-                  모두 펼치기
-                </button>
-                <button
-                  type="button"
-                  onClick={collapseAllFilteredQueueItems}
-                  className="ui-btn ui-btn-secondary px-3 text-[0.72rem]"
-                >
-                  모두 접기
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {filteredQueue.length === 0 ? (
-            <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.84rem] text-[color:var(--color-muted)]">
-              현재 필터에 해당하는 항목이 없어요.
-            </p>
-          ) : null}
-
-          <ul className="space-y-2.5">
-            {visibleQueue.map((item) => {
-            const metadataEditDisabled =
-              isUploading || item.status === "uploading" || item.status === "success";
-            const canRemoveQueueItem =
-              (item.status === "queued" || item.status === "error") && !isUploading;
-            const isExpanded = expandedQueueItemIds.includes(item.id);
-            const showMetadataEditor =
-              !queueCompactMode || isExpanded || item.status === "error";
-
-            return (
-              <li
-                key={item.id}
-                className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white p-3.5"
-              >
-                <div className="mb-2 flex items-start gap-3">
-                  {item.previewUrl ? (
-                    <Image
-                      src={item.previewUrl}
-                      alt={item.file.name}
-                      width={84}
-                      height={84}
-                      className="h-[5.25rem] w-[5.25rem] rounded-[0.9rem] object-cover"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="h-[5.25rem] w-[5.25rem] rounded-[0.9rem] bg-[color:var(--color-surface)]" />
-                  )}
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="truncate text-[0.9rem] font-semibold text-[color:var(--color-ink)]">
-                        {item.file.name}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] font-semibold text-[color:var(--color-muted)]">
-                          {item.visibility === "admin" ? "관리자 전용" : "가족 전용"}
-                        </span>
-                        <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.7rem] font-semibold text-[color:var(--color-muted)]">
-                          {QUEUE_STATUS_LABEL[item.status]}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeQueueItem(item.id)}
-                          disabled={!canRemoveQueueItem}
-                          className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[0.68rem] font-semibold text-rose-700 disabled:opacity-40"
-                        >
-                          제거
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleQueueItemExpanded(item.id)}
-                          className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]"
-                        >
-                          {showMetadataEditor ? "접기" : "상세"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {showMetadataEditor ? (
-                      <>
-                        <input
-                          value={item.caption}
-                          onChange={(event) => updateQueueCaption(item.id, event.target.value)}
-                          maxLength={MAX_CAPTION_LENGTH}
-                          disabled={metadataEditDisabled}
-                          className="ui-input min-h-10 w-full px-3 text-[0.82rem] disabled:opacity-60"
-                          placeholder="캡션"
-                        />
-                        <input
-                          type="datetime-local"
-                          value={item.takenAtInput}
-                          onChange={(event) => updateQueueTakenAtInput(item.id, event.target.value)}
-                          disabled={metadataEditDisabled}
-                          className="ui-input min-h-10 w-full px-3 text-[0.79rem] disabled:opacity-60"
-                        />
-                        <EventChipsInput
-                          value={item.eventNames}
-                          onChange={(eventNames) => updateQueueEventNames(item.id, eventNames)}
-                          disabled={metadataEditDisabled}
-                          placeholder="이벤트 입력 후 Enter"
-                        />
-                        <p className="text-[0.72rem] text-[color:var(--color-muted)]">
-                          {item.metadataLoading
-                            ? "메타데이터(날짜/위치) 추출 중…"
-                            : item.locationLabel
-                              ? `위치 추정: ${item.locationLabel}`
-                              : "위치정보 없음"}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-[0.72rem] text-[color:var(--color-muted)]">
-                        {item.caption} · {item.takenAtInput.replace("T", " ")} · 이벤트 {item.eventNames.length}개
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[color:var(--color-brand-soft)]">
-                  <div
-                    className="h-full rounded-full bg-[color:var(--color-brand)] transition-all"
-                    style={{ width: `${Math.round(item.progress * 100)}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-[0.74rem] text-[color:var(--color-muted)]">
-                  {Math.round(item.progress * 100)}% · {(item.file.size / (1024 * 1024)).toFixed(2)}MB
-                </p>
-                {item.uploadedPath ? (
-                  <p className="mt-1 text-[0.74rem] text-emerald-700">{item.uploadedPath}</p>
-                ) : null}
-                {item.errorReason ? (
-                  <p className="mt-1 text-[0.74rem] text-rose-700">{item.errorReason}</p>
-                ) : null}
-                {item.uploadedPhotoId ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleFeatured(item)}
-                    disabled={isUploading || togglingPhotoId === item.uploadedPhotoId}
-                    className={`ui-btn mt-2 px-3.5 text-[0.76rem] ${
-                      item.isFeatured ? "ui-btn-primary" : "ui-btn-secondary"
-                    } disabled:opacity-60`}
-                  >
-                    {togglingPhotoId === item.uploadedPhotoId
-                      ? "저장 중…"
-                      : item.isFeatured
-                        ? "대표컷 해제"
-                        : "대표컷으로 지정"}
-                  </button>
-                ) : null}
-              </li>
-            );
-            })}
-          </ul>
-          {hiddenFilteredQueueCount > 0 ? (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setVisibleQueueCount((current) =>
-                    Math.min(current + QUEUE_RENDER_STEP, filteredQueue.length),
-                  );
-                }}
-                className="ui-btn ui-btn-secondary px-4 text-[0.78rem]"
-              >
-                더 보기 ({hiddenFilteredQueueCount}개 남음)
-              </button>
-              <button
-                type="button"
-                onClick={() => setVisibleQueueCount(filteredQueue.length)}
-                className="ui-btn ui-btn-secondary px-4 text-[0.78rem]"
-              >
-                모두 보기
-              </button>
-            </div>
-          ) : null}
-        </section>
-      ) : (
-        <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3.5 py-3 text-[0.88rem] text-[color:var(--color-muted)]">
-          아직 업로드 대기 파일이 없어요.
-        </p>
-      )}
-
       <section className="ui-subtle-surface space-y-3 rounded-[var(--radius-md)] p-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[0.94rem] font-semibold text-[color:var(--color-ink)]">
-            기존 업로드 사진
+            기존 업로드 게시글
           </h2>
           <button
             type="button"
@@ -1900,87 +1472,97 @@ export function AdminConsole() {
           </p>
         ) : null}
 
-        {photos.length > 0 ? (
+        {groupedPosts.length > 0 ? (
           <ul className="space-y-2.5">
-            {photos.map((item) => {
-              const isEditing = editingPhotoId === item.id;
+            {groupedPosts.map((post) => {
+              const isEditing = editingPostId === post.id;
               const isBusy =
-                savingPhotoId === item.id || deletingPhotoId === item.id || isPhotosLoading;
+                savingPostId === post.id || deletingPostId === post.id || isPhotosLoading;
 
               return (
                 <li
-                  key={item.id}
+                  key={post.id}
                   className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-white p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <Image
-                      src={item.thumbSrc ?? item.src}
-                      alt={item.caption}
-                      width={64}
-                      height={64}
-                      className="h-16 w-16 rounded-[0.8rem] object-cover"
-                      unoptimized
-                    />
-                    <div className="min-w-0 flex-1 space-y-1">
-                      {isEditing ? (
-                        <>
-                          <input
-                            value={editingCaption}
-                            onChange={(event) => setEditingCaption(event.target.value)}
-                            className="ui-input min-h-10 w-full px-3 text-[0.83rem]"
-                            placeholder="캡션"
-                          />
-                          <input
-                            type="datetime-local"
-                            value={editingTakenAt}
-                            onChange={(event) => setEditingTakenAt(event.target.value)}
-                            className="ui-input min-h-10 w-full px-3 text-[0.8rem]"
-                          />
-                          <EventChipsInput
-                            value={editingEventNames}
-                            onChange={setEditingEventNames}
-                            disabled={isBusy}
-                            placeholder="이벤트 입력 후 Enter"
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <p className="truncate text-[0.88rem] font-semibold text-[color:var(--color-ink)]">
-                            {item.caption}
-                          </p>
-                          <p className="text-[0.74rem] text-[color:var(--color-muted)]">
-                            촬영일 {new Date(item.takenAt).toLocaleString("ko-KR")}
-                          </p>
-                          <p className="text-[0.72rem] text-[color:var(--color-muted)]">
-                            이벤트{" "}
-                            {(item.eventNames.length > 0 ? item.eventNames : ["일상"]).join(", ")}
-                          </p>
-                        </>
-                      )}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]">
-                          {item.visibility === "admin" ? "관리자 전용" : "가족 전용"}
-                        </span>
-                        <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]">
-                          {item.isFeatured ? "대표컷" : "일반"}
-                        </span>
-                      </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {post.photos.slice(0, 6).map((photo, index, array) => {
+                      const remaining = post.photos.length - array.length;
+                      const shouldShowOverlay = index === array.length - 1 && remaining > 0;
+
+                      return (
+                        <div key={photo.id} className="relative overflow-hidden rounded-[0.75rem]">
+                          {brokenPhotoPreviewIds.includes(photo.id) ? (
+                            <div className="flex aspect-square w-full items-center justify-center bg-[color:var(--color-surface)] text-[0.66rem] text-[color:var(--color-muted)]">
+                              이미지
+                            </div>
+                          ) : (
+                            <Image
+                              src={photo.thumbSrc ?? photo.src}
+                              alt={photo.caption}
+                              width={180}
+                              height={180}
+                              className="aspect-square w-full object-cover"
+                              unoptimized
+                              onError={() => {
+                                setBrokenPhotoPreviewIds((current) =>
+                                  current.includes(photo.id) ? current : [...current, photo.id],
+                                );
+                              }}
+                            />
+                          )}
+                          {shouldShowOverlay ? (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[0.86rem] font-semibold text-white">
+                              +{remaining}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 space-y-1">
+                    {isEditing ? (
+                      <>
+                        <input
+                          value={editingCaption}
+                          onChange={(event) => setEditingCaption(event.target.value)}
+                          className="ui-input min-h-10 w-full px-3 text-[0.83rem]"
+                          placeholder="캡션"
+                        />
+                        <p className="text-[0.72rem] text-[color:var(--color-muted)]">
+                          저장 시 캡션의 #해시태그가 이벤트로 자동 반영됩니다.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="truncate text-[0.9rem] font-semibold text-[color:var(--color-ink)]">
+                          {post.caption}
+                        </p>
+                      </>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]">
+                        {post.visibility === "admin" ? "관리자 전용" : "가족 전용"}
+                      </span>
+                      <span className="rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--color-muted)]">
+                        사진 {post.photos.length}장
+                      </span>
                     </div>
                   </div>
+
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {isEditing ? (
                       <>
                         <button
                           type="button"
-                          onClick={() => void handleSavePhotoEdit(item.id)}
+                          onClick={() => void handleSavePostEdit(post.id)}
                           disabled={isBusy}
                           className="ui-btn ui-btn-primary px-3 text-[0.76rem] disabled:opacity-60"
                         >
-                          {savingPhotoId === item.id ? "저장 중…" : "저장"}
+                          {savingPostId === post.id ? "저장 중…" : "저장"}
                         </button>
                         <button
                           type="button"
-                          onClick={handleCancelEditPhoto}
+                          onClick={handleCancelEditPost}
                           disabled={isBusy}
                           className="ui-btn ui-btn-secondary px-3 text-[0.76rem] disabled:opacity-60"
                         >
@@ -1991,19 +1573,19 @@ export function AdminConsole() {
                       <>
                         <button
                           type="button"
-                          onClick={() => handleStartEditPhoto(item)}
+                          onClick={() => handleStartEditPost(post)}
                           disabled={isBusy}
                           className="ui-btn ui-btn-secondary px-3 text-[0.76rem] disabled:opacity-60"
                         >
-                          편집
+                          게시글 편집
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleDeletePhoto(item)}
+                          onClick={() => void handleDeletePost(post)}
                           disabled={isBusy}
                           className="ui-btn px-3 text-[0.76rem] text-rose-700 ring-1 ring-inset ring-rose-300 hover:bg-rose-50 disabled:opacity-60"
                         >
-                          {deletingPhotoId === item.id ? "삭제 중…" : "삭제"}
+                          {deletingPostId === post.id ? "삭제 중…" : "게시글 삭제"}
                         </button>
                       </>
                     )}
@@ -2014,7 +1596,7 @@ export function AdminConsole() {
           </ul>
         ) : (
           <p className="rounded-[0.9rem] border border-dashed border-[color:var(--color-line)] bg-white px-3 py-2 text-[0.8rem] text-[color:var(--color-muted)]">
-            아직 업로드된 사진이 없어요.
+            아직 업로드된 게시글이 없어요.
           </p>
         )}
 

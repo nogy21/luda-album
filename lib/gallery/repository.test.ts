@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   createGalleryImageRecord,
   deleteGalleryPhotoRecord,
+  getTimelinePostDetailFromDatabase,
   listAdminPhotosPageFromDatabase,
   listGalleryImagesFromDatabase,
   listPhotoHighlightsFromDatabase,
@@ -180,11 +181,13 @@ describe("gallery repository", () => {
       updated_at: item.updated_at,
     }));
 
-    const pageBuilder = createBuilder({ data: pageRows, error: null });
+    const olderPageBuilder = createBuilder({ data: pageRows, error: null });
+    const sameTakenAtBuilder = createBuilder({ data: [], error: null });
     const summaryBuilder = createBuilder({ data: summaryRows, error: null });
     const from = vi
       .fn()
-      .mockReturnValueOnce(pageBuilder)
+      .mockReturnValueOnce(olderPageBuilder)
+      .mockReturnValueOnce(sameTakenAtBuilder)
       .mockReturnValueOnce(summaryBuilder);
 
     const result = await listPhotosPageFromDatabase(
@@ -199,10 +202,12 @@ describe("gallery repository", () => {
       "gallery_photos",
     );
 
-    expect(pageBuilder.limit).toHaveBeenCalledWith(3);
-    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
-    expect(pageBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-01T00:00:00.000Z");
-    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-03-01T00:00:00.000Z");
+    expect(olderPageBuilder.limit).toHaveBeenCalledWith(3);
+    expect(olderPageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(olderPageBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-01T00:00:00.000Z");
+    expect(olderPageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-03-01T00:00:00.000Z");
+    expect(sameTakenAtBuilder.eq).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(sameTakenAtBuilder.lt).toHaveBeenCalledWith("id", "cursor-id");
     expect(result.items).toHaveLength(2);
     expect(result.nextCursor).toBe("2026-02-11T10:00:00.000Z|2");
     expect(result.summary.totalCount).toBe(3);
@@ -211,6 +216,76 @@ describe("gallery repository", () => {
       count: 3,
       label: "2026년 2월",
     });
+  });
+
+  test("listPhotosPageFromDatabase includes same-timestamp rows after cursor id", async () => {
+    const sameTimestampRows = [
+      {
+        id: "8",
+        src: "https://example.com/8.jpg",
+        thumb_src: null,
+        alt: "여덟째 사진",
+        caption: "여덟째",
+        taken_at: "2026-02-12T10:00:00.000Z",
+        updated_at: "2026-02-12T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+      {
+        id: "7",
+        src: "https://example.com/7.jpg",
+        thumb_src: null,
+        alt: "일곱째 사진",
+        caption: "일곱째",
+        taken_at: "2026-02-12T10:00:00.000Z",
+        updated_at: "2026-02-12T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+    ];
+    const olderRows = [
+      {
+        id: "6",
+        src: "https://example.com/6.jpg",
+        thumb_src: null,
+        alt: "여섯째 사진",
+        caption: "여섯째",
+        taken_at: "2026-02-11T10:00:00.000Z",
+        updated_at: "2026-02-11T10:00:00.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+    ];
+    const summaryRows = [...sameTimestampRows, ...olderRows].map((item) => ({
+      id: item.id,
+      taken_at: item.taken_at,
+      updated_at: item.updated_at,
+    }));
+
+    const olderPageBuilder = createBuilder({ data: olderRows, error: null });
+    const sameTakenAtBuilder = createBuilder({ data: sameTimestampRows, error: null });
+    const summaryBuilder = createBuilder({ data: summaryRows, error: null });
+    const from = vi
+      .fn()
+      .mockReturnValueOnce(olderPageBuilder)
+      .mockReturnValueOnce(sameTakenAtBuilder)
+      .mockReturnValueOnce(summaryBuilder);
+
+    const result = await listPhotosPageFromDatabase(
+      { from },
+      {
+        cursor: "2026-02-12T10:00:00.000Z|9",
+        limit: 2,
+        visibility: "family",
+      },
+      "gallery_photos",
+    );
+
+    expect(result.items.map((item) => item.id)).toEqual(["8", "7"]);
+    expect(result.nextCursor).toBe("2026-02-12T10:00:00.000Z|7");
   });
 
   test("listPhotoSummaryFromDatabase groups and orders month buckets", async () => {
@@ -372,8 +447,12 @@ describe("gallery repository", () => {
       },
     ];
 
-    const pageBuilder = createBuilder({ data: rows, error: null });
-    const from = vi.fn(() => pageBuilder);
+    const olderPageBuilder = createBuilder({ data: rows, error: null });
+    const sameTakenAtBuilder = createBuilder({ data: [], error: null });
+    const from = vi
+      .fn()
+      .mockReturnValueOnce(olderPageBuilder)
+      .mockReturnValueOnce(sameTakenAtBuilder);
 
     const result = await listPhotosMonthPageFromDatabase(
       { from },
@@ -388,10 +467,12 @@ describe("gallery repository", () => {
     );
 
     expect(from).toHaveBeenCalledWith("gallery_photos");
-    expect(pageBuilder.eq).toHaveBeenCalledWith("visibility", "family");
-    expect(pageBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-01T00:00:00.000Z");
-    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-03-01T00:00:00.000Z");
-    expect(pageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(olderPageBuilder.eq).toHaveBeenCalledWith("visibility", "family");
+    expect(olderPageBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-01T00:00:00.000Z");
+    expect(olderPageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-03-01T00:00:00.000Z");
+    expect(olderPageBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(sameTakenAtBuilder.eq).toHaveBeenCalledWith("taken_at", "2026-02-14T00:00:00.000Z");
+    expect(sameTakenAtBuilder.lt).toHaveBeenCalledWith("id", "cursor-id");
     expect(result.items).toHaveLength(2);
     expect(result.nextCursor).toBe("2026-02-11T10:00:00.000Z|2");
   });
@@ -483,6 +564,7 @@ describe("gallery repository", () => {
         originalName: "luda-moment.jpg",
         type: "image/jpeg",
         size: 1234,
+        takenAt: "2026-02-12T10:00:00.000Z",
       },
       "gallery_photos",
     );
@@ -628,6 +710,63 @@ describe("gallery repository", () => {
     );
 
     expect(result.items[0]?.eventNames).toEqual(["여행"]);
+  });
+
+  test("getTimelinePostDetailFromDatabase groups photos by takenAt minute", async () => {
+    const primaryRow = {
+      id: "photo-1",
+      src: "https://example.com/1.jpg",
+      thumb_src: "https://example.com/thumb-1.jpg",
+      alt: "첫째 사진",
+      caption: "같은 게시글",
+      taken_at: "2026-02-16T09:00:30.000Z",
+      updated_at: "2026-02-16T09:00:30.000Z",
+      visibility: "family",
+      is_featured: false,
+      featured_rank: null,
+    };
+    const groupedRows = [
+      primaryRow,
+      {
+        id: "photo-2",
+        src: "https://example.com/2.jpg",
+        thumb_src: "https://example.com/thumb-2.jpg",
+        alt: "둘째 사진",
+        caption: "같은 게시글",
+        taken_at: "2026-02-16T09:00:15.000Z",
+        updated_at: "2026-02-16T09:00:15.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+      {
+        id: "photo-3",
+        src: "https://example.com/3.jpg",
+        thumb_src: "https://example.com/thumb-3.jpg",
+        alt: "셋째 사진",
+        caption: "같은 게시글",
+        taken_at: "2026-02-16T09:00:05.000Z",
+        updated_at: "2026-02-16T09:00:05.000Z",
+        visibility: "family",
+        is_featured: false,
+        featured_rank: null,
+      },
+    ];
+    const singleBuilder = createBuilder({ data: [primaryRow], error: null });
+    const groupBuilder = createBuilder({ data: groupedRows, error: null });
+    const from = vi.fn().mockReturnValueOnce(singleBuilder).mockReturnValueOnce(groupBuilder);
+
+    const result = await getTimelinePostDetailFromDatabase(
+      { from },
+      { postId: "photo-1", visibility: "family" },
+      "gallery_photos",
+    );
+
+    expect(result).not.toBeNull();
+    expect(groupBuilder.gte).toHaveBeenCalledWith("taken_at", "2026-02-16T09:00:00.000Z");
+    expect(groupBuilder.lt).toHaveBeenCalledWith("taken_at", "2026-02-16T09:01:00.000Z");
+    expect(result?.photos).toHaveLength(3);
+    expect(result?.commentPhotoId).toBe("photo-1");
   });
 
   test("updateGalleryPhotoMetadata updates caption and takenAt with derived alt", async () => {

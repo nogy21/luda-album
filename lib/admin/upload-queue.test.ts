@@ -32,6 +32,7 @@ describe("upload queue", () => {
     expect(withProgress[0].progress).toBe(0.5);
     expect(withProgress[0].status).toBe("uploading");
     expect(summary.totalProgress).toBe(0.25);
+    expect(summary.remainingCount).toBe(1);
   });
 
   it("prefers file lastModified as default takenAt", () => {
@@ -55,6 +56,7 @@ describe("upload queue", () => {
 
     expect(summary.successCount).toBe(1);
     expect(summary.failureCount).toBe(1);
+    expect(summary.remainingCount).toBe(0);
     expect(pickRetryTargets(withFailure).map((item) => item.file.name)).toEqual(["b.jpg"]);
   });
 });

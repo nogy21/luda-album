@@ -116,7 +116,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
       {open ? (
         <motion.div
           className="fixed inset-0 z-[var(--z-overlay)] flex items-end bg-[color:color-mix(in_srgb,var(--color-ink)_28%,transparent)] p-4 backdrop-blur-[3px] sm:p-6"
-          style={{ paddingBottom: "max(1rem, calc(var(--safe-area-bottom) + 0.7rem))" }}
+          style={{ paddingBottom: "max(0.72rem, calc(var(--safe-area-bottom) + 0.45rem))" }}
           initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
@@ -129,7 +129,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
         >
           <div className="layout-container">
             <motion.section
-              className="w-full overflow-hidden rounded-[1.2rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-ink)] shadow-[var(--shadow-float)]"
+              className="w-full max-h-[calc(100dvh-var(--safe-area-bottom)-1.2rem)] overflow-y-auto overscroll-contain rounded-[1.2rem] border border-[color:var(--color-line)] bg-[color:var(--color-surface)] text-[color:var(--color-ink)] shadow-[var(--shadow-float)]"
               role="dialog"
               aria-modal="true"
               aria-label="새 사진 알림"
@@ -158,7 +158,7 @@ export function NewPhotoBottomSheet({ latestPhotoTakenAt }: NewPhotoBottomSheetP
                 </h2>
               </header>
 
-              <div className="space-y-3 px-5 pb-5 pt-1">
+              <div className="space-y-3 px-5 pb-[max(1rem,calc(var(--safe-area-bottom)+0.6rem))] pt-1">
                 <p className="text-[0.88rem] leading-[1.55] text-[color:var(--color-muted)]">
                   바로 확인하거나, 잠시 뒤 다시 알려드릴게요.
                 </p>

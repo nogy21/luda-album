@@ -10,12 +10,8 @@ vi.mock("@/components/landing-guestbook-cta", () => ({
   LandingGuestbookCta: () => <section data-testid="guestbook-cta" />,
 }));
 
-vi.mock("@/components/landing-hero", () => ({
-  LandingHero: () => <section data-testid="landing-hero" />,
-}));
-
-vi.mock("@/components/landing-recent-section", () => ({
-  LandingRecentSection: () => <section data-testid="landing-recent" />,
+vi.mock("@/components/home-timeline-section", () => ({
+  HomeTimelineSection: () => <section data-testid="home-timeline" />,
 }));
 
 vi.mock("@/components/luda-day-banner", () => ({
@@ -28,6 +24,10 @@ vi.mock("@/components/new-photo-bottom-sheet", () => ({
 
 vi.mock("@/components/push-notification-panel", () => ({
   PushNotificationPanel: () => <section data-testid="push-panel" />,
+}));
+
+vi.mock("@/components/photo-refresh-button", () => ({
+  PhotoRefreshButton: () => <section data-testid="photo-refresh-button" />,
 }));
 
 vi.mock("@/components/app-shell", () => ({
@@ -58,6 +58,9 @@ describe("push panel exposure policy", () => {
     render(await home());
 
     expect(screen.getByTestId("push-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("photo-refresh-button")).toBeInTheDocument();
+    expect(screen.getByTestId("home-timeline")).toBeInTheDocument();
+    expect(screen.queryByTestId("guestbook-cta")).not.toBeInTheDocument();
 
     cleanup();
 
@@ -65,5 +68,6 @@ describe("push panel exposure policy", () => {
     render(await photos());
 
     expect(screen.queryByTestId("push-panel")).not.toBeInTheDocument();
+    expect(screen.getByTestId("photo-refresh-button")).toBeInTheDocument();
   });
 });

@@ -148,6 +148,7 @@ export const getQueueSummary = (queue: UploadQueueItem[]) => {
   const successCount = queue.filter((item) => item.status === "success").length;
   const failureCount = queue.filter((item) => item.status === "error").length;
   const uploadingCount = queue.filter((item) => item.status === "uploading").length;
+  const remainingCount = queue.filter((item) => item.status === "queued").length;
   const totalProgress =
     totalCount === 0
       ? 0
@@ -158,6 +159,7 @@ export const getQueueSummary = (queue: UploadQueueItem[]) => {
     successCount,
     failureCount,
     uploadingCount,
+    remainingCount,
     totalProgress,
   };
 };

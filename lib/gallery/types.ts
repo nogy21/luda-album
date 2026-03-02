@@ -36,6 +36,19 @@ export type PhotoListResponse = {
   };
 };
 
+export type PostTimelineResponse = {
+  items: PhotoItem[];
+  nextCursor: string | null;
+};
+
+export type TimelinePostDetail = {
+  id: string;
+  caption: string;
+  takenAt: string;
+  photos: PhotoItem[];
+  commentPhotoId: string;
+};
+
 export type HighlightResponse = {
   featured: PhotoItem[];
   highlights: PhotoItem[];

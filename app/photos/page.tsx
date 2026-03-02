@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { GallerySection } from "@/components/gallery-section";
 import { NewPhotoBottomSheet } from "@/components/new-photo-bottom-sheet";
+import { PhotoRefreshButton } from "@/components/photo-refresh-button";
 import {
   getE2EFixturePhotoSummary,
   listE2EFixtureMonthPage,
@@ -101,6 +102,7 @@ export default async function PhotosPage() {
 
   return (
     <AppShell>
+      <PhotoRefreshButton />
       <GallerySection
         initialSummary={initialSummary}
         initialMonthPages={initialMonthPages}

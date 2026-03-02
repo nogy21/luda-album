@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
 
 const tabs = [
   { href: "/", label: "홈" },
@@ -20,7 +21,11 @@ const isActivePath = (pathname: string, href: string) => {
 export function FixedBottomNav() {
   const pathname = usePathname();
 
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <nav
       className="fixed inset-x-0 bottom-0 z-[var(--z-bottom-nav)] pt-1"
       style={{ paddingBottom: "var(--bottom-nav-edge-offset)" }}
@@ -48,6 +53,7 @@ export function FixedBottomNav() {
           })}
         </div>
       </div>
-    </nav>
+    </nav>,
+    document.body,
   );
 }

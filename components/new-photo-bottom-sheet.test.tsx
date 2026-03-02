@@ -35,7 +35,10 @@ describe("NewPhotoBottomSheet", () => {
   it("locks page scroll while open and unlocks on dismiss", async () => {
     render(<NewPhotoBottomSheet latestPhotoTakenAt="2026-02-12T04:00:00.000Z" />);
 
-    await screen.findByRole("dialog", { name: "새 사진 알림" });
+    const dialog = await screen.findByRole("dialog", { name: "새 사진 알림" });
+    expect(dialog.className).toContain("max-h-[calc(100dvh-var(--safe-area-bottom)-1.2rem)]");
+    expect(dialog.className).toContain("overflow-y-auto");
+
     await waitFor(() => {
       expect(lockPageScrollMock).toHaveBeenCalledTimes(1);
     });
